@@ -243,8 +243,7 @@ impl OutputParser {
                             };
 
                             // OSC 133 → block events
-                            if osc_body.starts_with("133;") {
-                                let osc_content = &osc_body[4..];
+                            if let Some(osc_content) = osc_body.strip_prefix("133;") {
                                 if let Some(evt) = parse_osc133(osc_content) {
                                     if i > output_start {
                                         events.push(ParsedEvent::Output(
