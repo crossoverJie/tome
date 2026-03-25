@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo --version)",
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(yarn --version)",
+      "Bash(cargo install:*)",
+      "Bash(pnpm create:*)",
+      "Bash(npx create-tauri-app:*)",
+      "Bash(cp:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm approve-builds:*)",
+      "Bash(1:*)",
+      "Bash(pnpm config:*)",
+      "Bash(pnpm add:*)",
+      "Bash(git init:*)",
+      "Bash(git remote:*)",
+      "Bash(pnpm tauri:*)",
+      "Bash(chmod:*)",
+      "Bash(grep -r \"metaKey\\\\|ctrlKey\\\\|split\\\\|pane\\\\|tab\\\\|history\\\\|persistent\" /Users/chenjie/Documents/dev/github/tome/src-tauri/src --include=*.rs)",
+      "Bash(find /Users/chenjie/Documents/dev/github/tome -type f -name *.yml -o -name *.yaml -o -name Dockerfile)",
+      "Bash(git add:*)"
+    ]
+  }
+}
