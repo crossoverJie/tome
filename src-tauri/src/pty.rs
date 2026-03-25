@@ -175,18 +175,20 @@ impl PtyManager {
 
 // --- Output Parser ---
 
-enum ParsedEvent {
+#[derive(Debug, PartialEq)]
+pub(crate) enum ParsedEvent {
     Output(String),
     Block(BlockEventData),
     AlternateScreen(bool),
 }
 
-struct BlockEventData {
-    event_type: String,
-    exit_code: Option<i32>,
+#[derive(Debug, PartialEq)]
+pub(crate) struct BlockEventData {
+    pub event_type: String,
+    pub exit_code: Option<i32>,
 }
 
-struct OutputParser {
+pub(crate) struct OutputParser {
     buffer: String,
 }
 
@@ -290,7 +292,7 @@ impl OutputParser {
     }
 }
 
-fn find_osc_end(s: &str) -> Option<usize> {
+pub(crate) fn find_osc_end(s: &str) -> Option<usize> {
     let bytes = s.as_bytes();
     for i in 0..bytes.len() {
         if bytes[i] == 0x07 {
@@ -303,7 +305,7 @@ fn find_osc_end(s: &str) -> Option<usize> {
     None
 }
 
-fn parse_osc133(content: &str) -> Option<BlockEventData> {
+pub(crate) fn parse_osc133(content: &str) -> Option<BlockEventData> {
     let parts: Vec<&str> = content.splitn(2, ';').collect();
     match parts[0] {
         "A" => Some(BlockEventData {
@@ -326,5 +328,246 @@ fn parse_osc133(content: &str) -> Option<BlockEventData> {
             })
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- find_osc_end tests ---
+
+    #[test]
+    fn find_osc_end_with_bel_terminator() {
+        let s = "\x1b]133;A\x07rest";
+        assert_eq!(find_osc_end(s), Some(7));
+    }
+
+    #[test]
+    fn find_osc_end_with_st_terminator() {
+        let s = "\x1b]133;A\x1b\\rest";
+        assert_eq!(find_osc_end(s), Some(7));
+    }
+
+    #[test]
+    fn find_osc_end_no_terminator() {
+        let s = "\x1b]133;A";
+        assert_eq!(find_osc_end(s), None);
+    }
+
+    // --- parse_osc133 tests ---
+
+    #[test]
+    fn parse_osc133_prompt_start() {
+        let result = parse_osc133("A").unwrap();
+        assert_eq!(result.event_type, "prompt_start");
+        assert_eq!(result.exit_code, None);
+    }
+
+    #[test]
+    fn parse_osc133_input_start() {
+        let result = parse_osc133("B").unwrap();
+        assert_eq!(result.event_type, "input_start");
+        assert_eq!(result.exit_code, None);
+    }
+
+    #[test]
+    fn parse_osc133_command_start() {
+        let result = parse_osc133("C").unwrap();
+        assert_eq!(result.event_type, "command_start");
+        assert_eq!(result.exit_code, None);
+    }
+
+    #[test]
+    fn parse_osc133_command_end_with_exit_code() {
+        let result = parse_osc133("D;0").unwrap();
+        assert_eq!(result.event_type, "command_end");
+        assert_eq!(result.exit_code, Some(0));
+    }
+
+    #[test]
+    fn parse_osc133_command_end_with_nonzero_exit_code() {
+        let result = parse_osc133("D;127").unwrap();
+        assert_eq!(result.event_type, "command_end");
+        assert_eq!(result.exit_code, Some(127));
+    }
+
+    #[test]
+    fn parse_osc133_command_end_no_exit_code() {
+        let result = parse_osc133("D").unwrap();
+        assert_eq!(result.event_type, "command_end");
+        assert_eq!(result.exit_code, None);
+    }
+
+    #[test]
+    fn parse_osc133_unknown_marker() {
+        assert!(parse_osc133("Z").is_none());
+    }
+
+    // --- OutputParser tests ---
+
+    #[test]
+    fn parser_plain_text() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("hello world");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::Output("hello world".to_string()));
+    }
+
+    #[test]
+    fn parser_alternate_screen_enter() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("\x1b[?1049h");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::AlternateScreen(true));
+    }
+
+    #[test]
+    fn parser_alternate_screen_exit() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("\x1b[?1049l");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::AlternateScreen(false));
+    }
+
+    #[test]
+    fn parser_alternate_screen_with_surrounding_text() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("before\x1b[?1049hafter");
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::AlternateScreen(true));
+        assert_eq!(events[2], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_osc133_block_event_bel() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("\x1b]133;A\x07");
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "prompt_start".to_string(),
+                exit_code: None,
+            })
+        );
+    }
+
+    #[test]
+    fn parser_osc133_block_event_st() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("\x1b]133;C\x1b\\");
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "command_start".to_string(),
+                exit_code: None,
+            })
+        );
+    }
+
+    #[test]
+    fn parser_osc133_command_end_with_exit_code() {
+        let mut parser = OutputParser::new();
+        let events = parser.parse("\x1b]133;D;0\x07");
+        assert_eq!(events.len(), 1);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "command_end".to_string(),
+                exit_code: Some(0),
+            })
+        );
+    }
+
+    #[test]
+    fn parser_strips_other_osc_sequences() {
+        let mut parser = OutputParser::new();
+        // OSC 0 (set title) should be stripped
+        let events = parser.parse("before\x1b]0;my title\x07after");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_incomplete_osc_buffered() {
+        let mut parser = OutputParser::new();
+        // Incomplete OSC (no terminator) — should buffer
+        let events = parser.parse("text\x1b]133;A");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::Output("text".to_string()));
+
+        // Now complete it
+        let events = parser.parse("\x07more text");
+        assert_eq!(events.len(), 2);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "prompt_start".to_string(),
+                exit_code: None,
+            })
+        );
+        assert_eq!(events[1], ParsedEvent::Output("more text".to_string()));
+    }
+
+    #[test]
+    fn parser_full_block_lifecycle() {
+        let mut parser = OutputParser::new();
+        // Simulate: prompt_start → prompt text → input_start → user input → command_start → output
+        let input = "\x1b]133;A\x07$ \x1b]133;B\x07ls\x1b]133;C\x07file1 file2";
+        let events = parser.parse(input);
+
+        assert_eq!(events.len(), 6);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "prompt_start".to_string(),
+                exit_code: None,
+            })
+        );
+        assert_eq!(events[1], ParsedEvent::Output("$ ".to_string()));
+        assert_eq!(
+            events[2],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "input_start".to_string(),
+                exit_code: None,
+            })
+        );
+        assert_eq!(events[3], ParsedEvent::Output("ls".to_string()));
+        assert_eq!(
+            events[4],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "command_start".to_string(),
+                exit_code: None,
+            })
+        );
+        assert_eq!(events[5], ParsedEvent::Output("file1 file2".to_string()));
+
+        // command_end comes in a separate parse call (simulating chunked reads)
+        let events2 = parser.parse("\x1b]133;D;0\x07");
+        assert_eq!(events2.len(), 1);
+        assert_eq!(
+            events2[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "command_end".to_string(),
+                exit_code: Some(0),
+            })
+        );
+    }
+
+    #[test]
+    fn parser_multiple_chunks() {
+        let mut parser = OutputParser::new();
+
+        let events1 = parser.parse("hello ");
+        assert_eq!(events1.len(), 1);
+        assert_eq!(events1[0], ParsedEvent::Output("hello ".to_string()));
+
+        let events2 = parser.parse("world");
+        assert_eq!(events2.len(), 1);
+        assert_eq!(events2[0], ParsedEvent::Output("world".to_string()));
     }
 }

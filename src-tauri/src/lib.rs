@@ -43,13 +43,3 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_sample() {
-        assert_eq!(1 + 1, 2);
-    }
-}
