@@ -75,9 +75,8 @@ impl PtyManager {
             let _ = std::fs::write(integration_dir.join(".zshenv"), zshenv_content);
 
             // Forward .zshrc loading
-            let zshrc_content = format!(
-                "[[ -f \"{user_zdotdir}/.zshrc\" ]] && source \"{user_zdotdir}/.zshrc\"\n"
-            );
+            let zshrc_content =
+                format!("[[ -f \"{user_zdotdir}/.zshrc\" ]] && source \"{user_zdotdir}/.zshrc\"\n");
             let _ = std::fs::write(integration_dir.join(".zshrc"), zshrc_content);
 
             cmd.env("ZDOTDIR", integration_dir.to_string_lossy().to_string());
@@ -142,35 +141,25 @@ impl PtyManager {
             _master: pair.master,
         };
 
-        self.sessions
-            .lock()
-            .unwrap()
-            .insert(session_id.clone(), session);
+        self.sessions.lock().unwrap().insert(session_id.clone(), session);
 
         Ok(session_id)
     }
 
     pub fn write_input(&self, session_id: &str, data: &str) -> Result<(), String> {
         let mut sessions = self.sessions.lock().unwrap();
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or("Session not found")?;
+        let session = sessions.get_mut(session_id).ok_or("Session not found")?;
         session
             .writer
             .write_all(data.as_bytes())
             .map_err(|e| format!("Write error: {}", e))?;
-        session
-            .writer
-            .flush()
-            .map_err(|e| format!("Flush error: {}", e))?;
+        session.writer.flush().map_err(|e| format!("Flush error: {}", e))?;
         Ok(())
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
         let sessions = self.sessions.lock().unwrap();
-        let session = sessions
-            .get(session_id)
-            .ok_or("Session not found")?;
+        let session = sessions.get(session_id).ok_or("Session not found")?;
         session
             ._master
             .resize(PtySize {
@@ -295,9 +284,7 @@ impl OutputParser {
         }
 
         if output_start < self.buffer.len() {
-            events.push(ParsedEvent::Output(
-                self.buffer[output_start..].to_string(),
-            ));
+            events.push(ParsedEvent::Output(self.buffer[output_start..].to_string()));
         }
         self.buffer.clear();
         events

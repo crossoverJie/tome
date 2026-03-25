@@ -20,7 +20,10 @@
       "Bash(chmod:*)",
       "Bash(grep -r \"metaKey\\\\|ctrlKey\\\\|split\\\\|pane\\\\|tab\\\\|history\\\\|persistent\" /Users/chenjie/Documents/dev/github/tome/src-tauri/src --include=*.rs)",
       "Bash(find /Users/chenjie/Documents/dev/github/tome -type f -name *.yml -o -name *.yaml -o -name Dockerfile)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }
