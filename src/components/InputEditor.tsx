@@ -14,6 +14,13 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
   const historyIndexRef = useRef(-1);
   const savedInputRef = useRef("");
 
+  // Focus editor when enabled (pane becomes focused)
+  useEffect(() => {
+    if (!disabled && viewRef.current) {
+      viewRef.current.focus();
+    }
+  }, [disabled]);
+
   const handleSubmit = useCallback(
     (view: EditorView) => {
       const value = view.state.doc.toString();

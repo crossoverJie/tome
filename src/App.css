@@ -274,3 +274,62 @@ body {
   color: var(--text-muted);
   font-size: 13px;
 }
+
+/* Split Pane Styles */
+
+.split-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.split-container.horizontal {
+  flex-direction: row;
+}
+
+.split-container.vertical {
+  flex-direction: column;
+}
+
+.split-pane {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Resizer */
+.resizer {
+  background: var(--border-color);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.resizer.horizontal {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.resizer.vertical {
+  height: 4px;
+  cursor: row-resize;
+}
+
+.resizer:hover,
+.resizer.active {
+  background: var(--accent);
+}
+
+/* Pane View */
+.pane-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 2px solid transparent;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.pane-view.focused {
+  border-color: var(--accent);
+}
