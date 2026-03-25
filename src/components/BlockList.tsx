@@ -8,11 +8,7 @@ interface BlockListProps {
   onSelectBlock: (index: number | null) => void;
 }
 
-export function BlockList({
-  blocks,
-  selectedBlockIndex,
-  onSelectBlock,
-}: BlockListProps) {
+export function BlockList({ blocks, selectedBlockIndex, onSelectBlock }: BlockListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new output arrives
@@ -44,9 +40,7 @@ export function BlockList({
           endTime={block.endTime}
           isComplete={block.isComplete}
           isSelected={selectedBlockIndex === index}
-          onClick={() =>
-            onSelectBlock(selectedBlockIndex === index ? null : index)
-          }
+          onClick={() => onSelectBlock(selectedBlockIndex === index ? null : index)}
         />
       ))}
     </div>
