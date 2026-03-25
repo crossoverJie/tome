@@ -85,9 +85,6 @@ export function FullscreenTerminal({
   }, [visible]);
 
   return (
-    <div
-      className={`fullscreen-terminal ${visible ? "visible" : "hidden"}`}
-      ref={containerRef}
-    />
+    <div className={`fullscreen-terminal ${visible ? "visible" : "hidden"}`} ref={containerRef} />
   );
 }

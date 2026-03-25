@@ -44,8 +44,7 @@ export const Block = memo(function Block({
     }
   }, [output]);
 
-  const exitCodeClass =
-    exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
+  const exitCodeClass = exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
 
   return (
     <div
@@ -57,15 +56,11 @@ export const Block = memo(function Block({
         <span className="block-command">{command || "(empty)"}</span>
         <span className="block-meta">
           {isComplete && exitCode !== null && (
-            <span
-              className={`block-exit-code ${exitCode === 0 ? "success" : "error"}`}
-            >
+            <span className={`block-exit-code ${exitCode === 0 ? "success" : "error"}`}>
               {exitCode === 0 ? "✓" : `✗ ${exitCode}`}
             </span>
           )}
-          <span className="block-duration">
-            {formatDuration(startTime, endTime)}
-          </span>
+          <span className="block-duration">{formatDuration(startTime, endTime)}</span>
         </span>
       </div>
       {output && (

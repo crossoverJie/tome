@@ -1,7 +1,9 @@
-import { useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { BlockList } from "./components/BlockList";
 import { InputEditor } from "./components/InputEditor";
 import { FullscreenTerminal } from "./components/FullscreenTerminal";
+import { Settings } from "./components/Settings";
 import { useTerminalSession } from "./hooks/useTerminalSession";
 import "./App.css";
 
@@ -19,11 +21,27 @@ function App() {
     selectNextBlock,
   } = useTerminalSession();
 
+  const [showSettings, setShowSettings] = useState(false);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === "k") {
         e.preventDefault();
         clearBlocks();
+      }
+      if (e.metaKey && e.key === "n") {
+        e.preventDefault();
+        const label = `tome-${Date.now()}`;
+        new WebviewWindow(label, {
+          title: "Tome",
+          width: 1000,
+          height: 700,
+          url: "/",
+        });
+      }
+      if (e.metaKey && e.key === ",") {
+        e.preventDefault();
+        setShowSettings((prev) => !prev);
       }
       if (e.metaKey && e.key === "ArrowUp") {
         e.preventDefault();
@@ -55,6 +73,7 @@ function App() {
 
   return (
     <div className="app">
+      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       {!isAlternateScreen && (
         <>
           <BlockList
