@@ -19,7 +19,7 @@ interface BlockProps {
   onClick: () => void;
 }
 
-function formatDuration(start: number, end: number | null): string {
+export function formatDuration(start: number, end: number | null): string {
   if (!end) return "...";
   const ms = end - start;
   if (ms < 1000) return `${ms}ms`;
