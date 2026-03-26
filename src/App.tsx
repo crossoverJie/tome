@@ -63,7 +63,7 @@ function App() {
       }
 
       // Split vertically: Cmd+Shift+D
-      if (e.metaKey && e.shiftKey && e.key === "D") {
+      if (e.metaKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
         e.preventDefault();
         if (focusedPaneId) {
           splitPane(focusedPaneId, "vertical");
