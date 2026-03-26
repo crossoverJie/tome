@@ -1,5 +1,7 @@
+mod completion;
 mod pty;
 
+use completion::CompletionResponse;
 use pty::PtyManager;
 use std::sync::Arc;
 use tauri::State;
@@ -16,6 +18,16 @@ fn create_session(app: tauri::AppHandle, state: State<AppState>) -> Result<Strin
 #[tauri::command]
 fn write_input(session_id: String, data: String, state: State<AppState>) -> Result<(), String> {
     state.pty_manager.write_input(&session_id, &data)
+}
+
+#[tauri::command]
+fn request_completion(
+    session_id: String,
+    text: String,
+    cursor: usize,
+    state: State<AppState>,
+) -> Result<CompletionResponse, String> {
+    state.pty_manager.request_completion(&session_id, &text, cursor)
 }
 
 #[tauri::command]
@@ -39,6 +51,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             create_session,
             write_input,
+            request_completion,
             resize_pty
         ])
         .run(tauri::generate_context!())

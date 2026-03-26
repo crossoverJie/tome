@@ -257,6 +257,7 @@ body {
 .input-editor {
   display: flex;
   align-items: flex-start;
+  position: relative;
   background: var(--bg-input);
   border-top: 1px solid var(--border-color);
   padding: 8px 12px;
@@ -277,6 +278,57 @@ body {
 
 .input-editor-container {
   flex: 1;
+}
+
+.completion-menu {
+  position: absolute;
+  left: 44px;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+
+.completion-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.completion-menu-item:hover,
+.completion-menu-item.selected {
+  background: var(--bg-block-hover);
+}
+
+.completion-menu-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.completion-menu-kind {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 .input-editor-container .cm-editor {
