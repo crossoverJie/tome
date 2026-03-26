@@ -32,6 +32,7 @@ fn resize_pty(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             pty_manager: Arc::new(PtyManager::new()),
         })

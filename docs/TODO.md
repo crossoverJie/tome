@@ -88,8 +88,8 @@
 - [x] Block 搜索（Cmd+F 全局搜索输出内容）
 
 ### 2.4 补全与历史
-- [ ] Tab 补全（发送 Tab 字符到 PTY，解析返回）
-- [ ] 命令历史持久化与浏览
+- [ ] Tab 补全（Warp-style 补全菜单需要复杂的 shell 集成，当前架构不支持）
+- [x] 命令历史持久化与浏览（使用 Tauri FS API 保存到应用数据目录）
 
 ### 2.5 Shell Integration 扩展
 - [ ] bash shell integration 支持
