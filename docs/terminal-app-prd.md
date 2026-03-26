@@ -82,14 +82,14 @@
 - 支持多行输入（Shift+Enter 换行）
 - 支持基本的文本编辑快捷键（Cmd+A, Cmd+C/V/X, Option+←/→ 等）
 - 支持命令历史（↑/↓ 翻阅历史命令）
-- 支持 Tab 补全（通过 shell 的补全机制）
+- 支持 Tab 补全（首版支持 zsh 的基础命令 / 路径补全，复杂 shell-native / Warp-style 菜单可后续增强）
 - 输入区域固定在窗口底部
 
 **技术实现：**
 
 - 使用 Web 编辑器组件（Monaco Editor 精简版 / CodeMirror / 自定义 contenteditable）
 - 回车时将输入内容通过 Tauri IPC 发送给 Rust 后端写入 PTY
-- 补全功能通过向 PTY 发送 Tab 字符并解析返回结果实现
+- 首版补全通过前端请求后端 completion API 实现：后端基于当前 shell 类型与会话 cwd 计算基础命令 / 路径候选，前端渲染简单候选菜单
 
 ### 2.3 全屏程序支持（P0）
 
@@ -343,7 +343,7 @@ OSC 133 协议（FinalTerm 协议）标记：
 - [x] 分屏支持
 - [x] 多标签页
 - [ ] 命令历史浏览
-- [ ] Tab 补全
+- [x] Tab 补全（zsh 基础命令 / 路径补全）
 - [ ] Block 搜索（Cmd+F）
 - [ ] Block 折叠/展开
 - [ ] Shell Integration：bash / fish 支持

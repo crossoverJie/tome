@@ -8,6 +8,7 @@ import {
   getSessionIdForPane,
   setSessionIdForPane,
 } from "./sessionState";
+import type { CompletionResponse } from "../types/completion";
 
 export interface Block {
   id: string;
@@ -42,6 +43,7 @@ interface UseTerminalSessionReturn {
   isAlternateScreen: boolean;
   rawOutput: string;
   sendInput: (data: string) => void;
+  requestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   resizePty: (cols: number, rows: number) => void;
   clearBlocks: () => void;
   selectedBlockIndex: number | null;
@@ -242,6 +244,26 @@ export function useTerminalSession(
     [sessionId]
   );
 
+  const requestCompletion = useCallback(
+    async (text: string, cursor: number) => {
+      if (!sessionId) {
+        return {
+          replaceFrom: cursor,
+          replaceTo: cursor,
+          commonPrefix: null,
+          items: [],
+        };
+      }
+
+      return invoke<CompletionResponse>("request_completion", {
+        sessionId,
+        text,
+        cursor,
+      });
+    },
+    [sessionId]
+  );
+
   const resizePty = useCallback(
     (cols: number, rows: number) => {
       if (!sessionId) return;
@@ -367,6 +389,7 @@ export function useTerminalSession(
     isAlternateScreen,
     rawOutput,
     sendInput,
+    requestCompletion,
     resizePty,
     clearBlocks,
     selectedBlockIndex,

@@ -1,8 +1,12 @@
+use crate::completion::CompletionResponse;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine;
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -24,6 +28,8 @@ pub enum TerminalEvent {
 struct PtySession {
     writer: Box<dyn Write + Send>,
     _master: Box<dyn MasterPty + Send>,
+    shell: String,
+    current_dir: Arc<Mutex<PathBuf>>,
 }
 
 pub struct PtyManager {
@@ -97,6 +103,10 @@ impl PtyManager {
             .map_err(|e| format!("Failed to get PTY reader: {}", e))?;
 
         let sid = session_id.clone();
+        let current_dir = Arc::new(Mutex::new(
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+        ));
+        let current_dir_for_reader = Arc::clone(&current_dir);
 
         // Spawn reader thread
         std::thread::spawn(move || {
@@ -127,6 +137,12 @@ impl PtyManager {
                                         active,
                                     }
                                 }
+                                ParsedEvent::CurrentDirectory(path) => {
+                                    if let Ok(mut cwd) = current_dir_for_reader.lock() {
+                                        *cwd = PathBuf::from(path);
+                                    }
+                                    continue;
+                                }
                             };
                             let _ = app.emit("terminal-event", te);
                         }
@@ -139,6 +155,8 @@ impl PtyManager {
         let session = PtySession {
             writer,
             _master: pair.master,
+            shell,
+            current_dir,
         };
 
         self.sessions.lock().unwrap().insert(session_id.clone(), session);
@@ -171,6 +189,26 @@ impl PtyManager {
             .map_err(|e| format!("Resize error: {}", e))?;
         Ok(())
     }
+
+    pub fn request_completion(
+        &self,
+        session_id: &str,
+        text: &str,
+        cursor: usize,
+    ) -> Result<CompletionResponse, String> {
+        let (shell, current_dir) = {
+            let sessions = self.sessions.lock().unwrap();
+            let session = sessions.get(session_id).ok_or("Session not found")?;
+            let current_dir = session
+                .current_dir
+                .lock()
+                .map_err(|_| "Failed to access session cwd".to_string())?
+                .clone();
+            (session.shell.clone(), current_dir)
+        };
+
+        crate::completion::request_completion(&shell, &current_dir, text, cursor)
+    }
 }
 
 // --- Output Parser ---
@@ -180,6 +218,7 @@ pub(crate) enum ParsedEvent {
     Output(String),
     Block(BlockEventData),
     AlternateScreen(bool),
+    CurrentDirectory(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -259,6 +298,20 @@ impl OutputParser {
                                 }
                             }
 
+                            if let Some(osc_content) = osc_body.strip_prefix("633;") {
+                                if let Some(path) = parse_tome_osc(osc_content) {
+                                    if i > output_start {
+                                        events.push(ParsedEvent::Output(
+                                            self.buffer[output_start..i].to_string(),
+                                        ));
+                                    }
+                                    events.push(ParsedEvent::CurrentDirectory(path));
+                                    i += skip;
+                                    output_start = i;
+                                    continue;
+                                }
+                            }
+
                             // All other OSC sequences (title, etc.) → strip silently
                             if i > output_start {
                                 events.push(ParsedEvent::Output(
@@ -327,6 +380,17 @@ pub(crate) fn parse_osc133(content: &str) -> Option<BlockEventData> {
                 exit_code,
             })
         }
+        _ => None,
+    }
+}
+
+pub(crate) fn parse_tome_osc(content: &str) -> Option<String> {
+    let mut parts = content.splitn(3, ';');
+    match (parts.next(), parts.next()) {
+        (Some("P"), Some(encoded_path)) => BASE64_STANDARD
+            .decode(encoded_path)
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok()),
         _ => None,
     }
 }
@@ -402,6 +466,15 @@ mod tests {
     #[test]
     fn parse_osc133_unknown_marker() {
         assert!(parse_osc133("Z").is_none());
+    }
+
+    #[test]
+    fn parse_tome_osc_current_directory() {
+        let encoded = BASE64_STANDARD.encode("/tmp/project");
+        assert_eq!(
+            parse_tome_osc(&format!("P;{encoded}")),
+            Some("/tmp/project".to_string())
+        );
     }
 
     // --- OutputParser tests ---

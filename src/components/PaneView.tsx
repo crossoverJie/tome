@@ -18,6 +18,7 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
     isAlternateScreen,
     rawOutput,
     sendInput,
+    requestCompletion,
     resizePty,
     selectedBlockIndex,
     selectBlock,
@@ -103,7 +104,15 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFocused, isSearchOpen, selectedBlockIndex, blocks, toggleBlockCollapse, toggleSearch, closeSearch]);
+  }, [
+    isFocused,
+    isSearchOpen,
+    selectedBlockIndex,
+    blocks,
+    toggleBlockCollapse,
+    toggleSearch,
+    closeSearch,
+  ]);
 
   // Handle pane focus when clicked
   const handleClick = useCallback(
@@ -141,7 +150,11 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
             searchResults={searchResults}
             currentSearchIndex={currentSearchIndex}
           />
-          <InputEditor onSubmit={handleSubmit} disabled={!isFocused || isAlternateScreen} />
+          <InputEditor
+            onSubmit={handleSubmit}
+            onRequestCompletion={requestCompletion}
+            disabled={!isFocused || isAlternateScreen}
+          />
         </>
       )}
       <FullscreenTerminal
