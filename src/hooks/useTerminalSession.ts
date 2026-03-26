@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import {
+  getSessionState,
+  setSessionState,
+  updateSessionState,
+  getSessionIdForPane,
+  setSessionIdForPane,
+} from "./sessionState";
 
 export interface Block {
   id: string;
@@ -33,24 +40,72 @@ interface UseTerminalSessionReturn {
   selectNextBlock: () => void;
 }
 
-export function useTerminalSession(): UseTerminalSessionReturn {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [blocks, setBlocks] = useState<Block[]>([]);
-  const [isAlternateScreen, setIsAlternateScreen] = useState(false);
-  const [rawOutput, setRawOutput] = useState("");
+export function useTerminalSession(paneId?: string, existingSessionId?: string): UseTerminalSessionReturn {
+  // Get persisted session ID for this pane
+  const persistedSessionId = paneId ? getSessionIdForPane(paneId) : undefined;
+  const initialSessionId = existingSessionId || persistedSessionId || null;
+
+  const [sessionId, setSessionIdState] = useState<string | null>(initialSessionId);
+
+  // Use a ref to track if we've initialized to avoid race conditions
+  const hasInitialized = useRef(false);
+
+  // Get persisted state if available
+  const persistedState = initialSessionId ? getSessionState(initialSessionId) : undefined;
+
+  const [blocks, setBlocks] = useState<Block[]>(persistedState?.blocks || []);
+  const [isAlternateScreen, setIsAlternateScreen] = useState(persistedState?.isAlternateScreen || false);
+  const [rawOutput, setRawOutput] = useState(persistedState?.rawOutput || "");
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const currentCommandRef = useRef("");
   const pendingCommandRef = useRef("");
-  const blockIdCounter = useRef(0);
+  const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
+
+  // Persist state whenever it changes
+  useEffect(() => {
+    if (sessionId) {
+      updateSessionState(sessionId, { blocks, isAlternateScreen, rawOutput });
+    }
+  }, [sessionId, blocks, isAlternateScreen, rawOutput]);
 
   useEffect(() => {
+    // Prevent double initialization
+    if (hasInitialized.current) {
+      return;
+    }
+
     let unlisten: UnlistenFn | undefined;
 
     async function init() {
-      const sid = await invoke<string>("create_session");
-      setSessionId(sid);
+      // Determine the session ID to use
+      let sid: string;
 
+      if (sessionId) {
+        // Use existing session ID
+        sid = sessionId;
+      } else {
+        // Create new session
+        sid = await invoke<string>("create_session");
+        setSessionIdState(sid);
+
+        // Register session ID for this pane
+        if (paneId) {
+          setSessionIdForPane(paneId, sid);
+        }
+
+        // Initialize session state
+        setSessionState(sid, {
+          sessionId: sid,
+          blocks: [],
+          isAlternateScreen: false,
+          rawOutput: "",
+        });
+      }
+
+      hasInitialized.current = true;
+
+      // Set up event listener for this session
       unlisten = await listen<TerminalEvent>("terminal-event", (event) => {
         const payload = event.payload;
         if (payload.session_id !== sid) return;
@@ -136,7 +191,7 @@ export function useTerminalSession(): UseTerminalSessionReturn {
     return () => {
       unlisten?.();
     };
-  }, []);
+  }, [paneId]);
 
   const sendInput = useCallback(
     (data: string) => {
@@ -174,15 +229,17 @@ export function useTerminalSession(): UseTerminalSessionReturn {
 
   const selectPrevBlock = useCallback(() => {
     setSelectedBlockIndex((prev) => {
-      if (prev === null) return blocks.length > 0 ? blocks.length - 1 : null;
+      const currentBlocksLength = blocks.length;
+      if (prev === null) return currentBlocksLength > 0 ? currentBlocksLength - 1 : null;
       return prev > 0 ? prev - 1 : 0;
     });
   }, [blocks.length]);
 
   const selectNextBlock = useCallback(() => {
     setSelectedBlockIndex((prev) => {
+      const currentBlocksLength = blocks.length;
       if (prev === null) return null;
-      if (prev >= blocks.length - 1) return null;
+      if (prev >= currentBlocksLength - 1) return null;
       return prev + 1;
     });
   }, [blocks.length]);
