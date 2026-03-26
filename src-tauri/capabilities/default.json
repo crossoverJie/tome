@@ -7,6 +7,11 @@
     "core:default",
     "core:window:allow-create",
     "core:webview:allow-create-webview-window",
-    "opener:default"
+    "opener:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write"
   ]
 }

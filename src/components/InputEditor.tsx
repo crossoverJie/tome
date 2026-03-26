@@ -1,6 +1,7 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
+import { useCommandHistory } from "../hooks/useCommandHistory";
 
 interface InputEditorProps {
   onSubmit: (command: string) => void;
@@ -10,7 +11,7 @@ interface InputEditorProps {
 export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  const { history, addCommand } = useCommandHistory();
   const historyIndexRef = useRef(-1);
   const savedInputRef = useRef("");
 
@@ -26,7 +27,7 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
       const value = view.state.doc.toString();
       if (value.trim()) {
         onSubmit(value + "\n");
-        setHistory((prev) => [...prev, value]);
+        addCommand(value);
         historyIndexRef.current = -1;
         savedInputRef.current = "";
       } else {
@@ -37,7 +38,7 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
       });
       return true;
     },
-    [onSubmit]
+    [onSubmit, addCommand]
   );
 
   const handleHistoryUp = useCallback(
@@ -81,6 +82,15 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
     [history]
   );
 
+  const handleTab = useCallback(
+    (_view: EditorView) => {
+      // Tab completion disabled in Block mode - it requires complex shell integration
+      // to synchronize editor state with shell completion results
+      return false;
+    },
+    []
+  );
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -103,6 +113,10 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
           {
             key: "ArrowDown",
             run: (view) => handleHistoryDown(view),
+          },
+          {
+            key: "Tab",
+            run: (view) => handleTab(view),
           },
         ]),
         placeholder("Type a command..."),
@@ -146,7 +160,7 @@ export function InputEditor({ onSubmit, disabled }: InputEditorProps) {
     return () => {
       view.destroy();
     };
-  }, [handleSubmit, handleHistoryUp, handleHistoryDown]);
+  }, [handleSubmit, handleHistoryUp, handleHistoryDown, handleTab]);
 
   return (
     <div className={`input-editor ${disabled ? "disabled" : ""}`}>
