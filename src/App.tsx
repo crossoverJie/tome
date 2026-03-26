@@ -2,13 +2,18 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
-import { useSplitPanes } from "./hooks/useSplitPanes";
+import { TabBar } from "./components/TabBar";
+import { useTabs } from "./hooks/useTabs";
 import "./App.css";
 
 function App() {
   const {
-    rootPaneId,
-    panes,
+    tabs,
+    activeTabId,
+    createTab,
+    closeTab,
+    switchTab,
+    switchTabByIndex,
     focusedPaneId,
     splitPane,
     closePane,
@@ -16,7 +21,7 @@ function App() {
     focusNextPane,
     focusPrevPane,
     updateSplitRatio,
-  } = useSplitPanes();
+  } = useTabs();
 
   const [showSettings, setShowSettings] = useState(false);
   const [blockSelectionMap, setBlockSelectionMap] = useState<
@@ -53,6 +58,20 @@ function App() {
         return;
       }
 
+      // New tab: Cmd+T
+      if (e.metaKey && e.key === "t") {
+        e.preventDefault();
+        createTab();
+        return;
+      }
+
+      // Switch tab by index: Cmd+1..9
+      if (e.metaKey && e.key >= "1" && e.key <= "9" && !e.shiftKey) {
+        e.preventDefault();
+        switchTabByIndex(parseInt(e.key) - 1);
+        return;
+      }
+
       // Split horizontally: Cmd+D
       if (e.metaKey && e.key === "d" && !e.shiftKey) {
         e.preventDefault();
@@ -71,14 +90,12 @@ function App() {
         return;
       }
 
-      // Close pane: Cmd+W
+      // Close pane/tab: Cmd+W
       if (e.metaKey && e.key === "w") {
         e.preventDefault();
         if (focusedPaneId) {
           const result = closePane(focusedPaneId);
           if (result.shouldCloseWindow) {
-            // Signal to Tauri to close the window
-            // We'll use window.close() for now as getCurrentWindow is not available
             window.close();
           }
         }
@@ -114,6 +131,8 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
+    createTab,
+    switchTabByIndex,
     splitPane,
     closePane,
     focusPane,
@@ -123,45 +142,48 @@ function App() {
     getFocusedPaneBlocks,
   ]);
 
-  // Clean up closed pane data
+  // Clean up closed pane data from blockSelectionMap
   useEffect(() => {
+    const allPaneIds = new Set<string>();
+    for (const tab of tabs) {
+      for (const paneId of tab.panes.keys()) {
+        allPaneIds.add(paneId);
+      }
+    }
+
     setBlockSelectionMap((prev) => {
       const newMap = new Map(prev);
       for (const paneId of newMap.keys()) {
-        if (!panes.has(paneId)) {
+        if (!allPaneIds.has(paneId)) {
           newMap.delete(paneId);
         }
       }
       return newMap;
     });
-  }, [panes]);
-
-  // Close sessions for removed panes
-  useEffect(() => {
-    const activeSessionIds = new Set<string>();
-    for (const pane of panes.values()) {
-      if (pane.type === "leaf" && pane.sessionId) {
-        activeSessionIds.add(pane.sessionId);
-      }
-    }
-
-    // Note: Session cleanup happens in the closePane function
-    // This effect is for any additional cleanup if needed
-  }, [panes]);
+  }, [tabs]);
 
   return (
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
-      {rootPaneId && (
-        <SplitPaneContainer
-          paneId={rootPaneId}
-          panes={panes}
-          focusedPaneId={focusedPaneId}
-          onFocusPane={focusPane}
-          onUpdateSplitRatio={updateSplitRatio}
-          containerRef={containerRef}
-        />
-      )}
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSwitchTab={switchTab}
+        onCreateTab={createTab}
+        onCloseTab={closeTab}
+      />
+      {tabs.map((tab) => (
+        <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
+          <SplitPaneContainer
+            paneId={tab.rootPaneId}
+            panes={tab.panes}
+            focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
+            onFocusPane={focusPane}
+            onUpdateSplitRatio={updateSplitRatio}
+            containerRef={containerRef}
+          />
+        </div>
+      ))}
     </div>
   );
 }

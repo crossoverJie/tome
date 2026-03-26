@@ -40,7 +40,10 @@ interface UseTerminalSessionReturn {
   selectNextBlock: () => void;
 }
 
-export function useTerminalSession(paneId?: string, existingSessionId?: string): UseTerminalSessionReturn {
+export function useTerminalSession(
+  paneId?: string,
+  existingSessionId?: string
+): UseTerminalSessionReturn {
   // Get persisted session ID for this pane
   const persistedSessionId = paneId ? getSessionIdForPane(paneId) : undefined;
   const initialSessionId = existingSessionId || persistedSessionId || null;
@@ -54,7 +57,9 @@ export function useTerminalSession(paneId?: string, existingSessionId?: string):
   const persistedState = initialSessionId ? getSessionState(initialSessionId) : undefined;
 
   const [blocks, setBlocks] = useState<Block[]>(persistedState?.blocks || []);
-  const [isAlternateScreen, setIsAlternateScreen] = useState(persistedState?.isAlternateScreen || false);
+  const [isAlternateScreen, setIsAlternateScreen] = useState(
+    persistedState?.isAlternateScreen || false
+  );
   const [rawOutput, setRawOutput] = useState(persistedState?.rawOutput || "");
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
