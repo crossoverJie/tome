@@ -19,10 +19,7 @@ export function setSessionState(sessionId: string, state: SessionState): void {
   sessionStateRegistry.set(sessionId, state);
 }
 
-export function updateSessionState(
-  sessionId: string,
-  updates: Partial<SessionState>
-): void {
+export function updateSessionState(sessionId: string, updates: Partial<SessionState>): void {
   const existing = sessionStateRegistry.get(sessionId);
   if (existing) {
     sessionStateRegistry.set(sessionId, { ...existing, ...updates });
