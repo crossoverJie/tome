@@ -1,6 +1,6 @@
 # Tome - 开发任务清单
 
-基于 `terminal-app-prd.md` 拆分，按优先级和依赖关系排列。
+基于 `docs/terminal-app-prd.md` 拆分，按优先级和依赖关系排列。
 
 ---
 

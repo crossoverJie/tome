@@ -20,7 +20,7 @@
 | CI / GitHub Actions | ✅ 已完成 |
 | 构建与分发 | ⬚ 未开始 |
 
-详细任务清单见 `TODO.md`。
+详细任务清单见 `docs/TODO.md`。
 
 ---
 
