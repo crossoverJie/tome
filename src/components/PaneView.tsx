@@ -1,7 +1,8 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { BlockList } from "./BlockList";
 import { InputEditor } from "./InputEditor";
 import { FullscreenTerminal } from "./FullscreenTerminal";
+import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
 
 interface PaneViewProps {
@@ -20,7 +21,20 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
     resizePty,
     selectedBlockIndex,
     selectBlock,
+    toggleBlockCollapse,
+    // Search
+    searchQuery,
+    searchResults,
+    currentSearchIndex,
+    setSearchQuery,
+    nextSearchResult,
+    prevSearchResult,
+    clearSearch,
   } = useTerminalSession(paneId, sessionId);
+
+  // Search overlay visibility state (local to each pane)
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const paneRef = useRef<HTMLDivElement>(null);
 
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
@@ -37,6 +51,60 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
     [sendInput, selectBlock]
   );
 
+  // Toggle search overlay
+  const toggleSearch = useCallback(() => {
+    setIsSearchOpen((prev) => {
+      if (prev) {
+        clearSearch();
+      }
+      return !prev;
+    });
+  }, [clearSearch]);
+
+  // Close search
+  const closeSearch = useCallback(() => {
+    setIsSearchOpen(false);
+    clearSearch();
+  }, [clearSearch]);
+
+  // Handle keyboard events for block collapse and search
+  useEffect(() => {
+    if (!isFocused) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+F - toggle search
+      if (e.metaKey && e.key === "f") {
+        e.preventDefault();
+        toggleSearch();
+        return;
+      }
+
+      // When search is open
+      if (isSearchOpen) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeSearch();
+          return;
+        }
+        // Enter/Shift+Enter handled by SearchOverlay
+        return;
+      }
+
+      // Enter - toggle collapse of selected block
+      if (e.key === "Enter" && selectedBlockIndex !== null && !e.metaKey && !e.shiftKey) {
+        e.preventDefault();
+        const block = blocks[selectedBlockIndex];
+        if (block) {
+          toggleBlockCollapse(block.id);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFocused, isSearchOpen, selectedBlockIndex, blocks, toggleBlockCollapse, toggleSearch, closeSearch]);
+
   // Handle pane focus when clicked
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -52,13 +120,26 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
   );
 
   return (
-    <div className={`pane-view ${isFocused ? "focused" : ""}`} onClick={handleClick}>
+    <div className={`pane-view ${isFocused ? "focused" : ""}`} onClick={handleClick} ref={paneRef}>
+      <SearchOverlay
+        query={searchQuery}
+        resultCount={searchResults.length}
+        currentIndex={currentSearchIndex}
+        isOpen={isSearchOpen}
+        onQueryChange={setSearchQuery}
+        onNext={nextSearchResult}
+        onPrev={prevSearchResult}
+        onClose={closeSearch}
+      />
       {!isAlternateScreen && (
         <>
           <BlockList
             blocks={blocks}
             selectedBlockIndex={selectedBlockIndex}
             onSelectBlock={selectBlock}
+            onToggleCollapse={toggleBlockCollapse}
+            searchResults={searchResults}
+            currentSearchIndex={currentSearchIndex}
           />
           <InputEditor onSubmit={handleSubmit} disabled={!isFocused || isAlternateScreen} />
         </>

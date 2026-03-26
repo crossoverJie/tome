@@ -100,6 +100,21 @@ body {
   font-size: 13px;
 }
 
+.block-collapse-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.block-collapse-btn:hover {
+  color: var(--text-primary);
+}
+
 .block-prompt {
   color: var(--accent);
   font-weight: bold;
@@ -144,6 +159,98 @@ body {
   line-height: 1.4;
   font-family: var(--font-mono);
   margin: 0;
+}
+
+.block-output-collapsed {
+  padding: 4px 12px 8px 36px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Search Highlight */
+.search-highlight {
+  background: rgba(124, 124, 255, 0.3);
+  border-radius: 2px;
+}
+
+.search-highlight-active {
+  background: rgba(124, 124, 255, 0.6);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Search Overlay */
+.search-overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 50;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.search-input {
+  background: var(--bg-block);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 4px 8px;
+  width: 160px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--accent);
+}
+
+.search-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 40px;
+  text-align: center;
+}
+
+.search-nav-btn,
+.search-close-btn {
+  background: var(--bg-block);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 4px 6px;
+  line-height: 1;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.search-nav-btn:hover:not(:disabled),
+.search-close-btn:hover {
+  background: var(--bg-block-hover);
+  color: var(--text-primary);
+}
+
+.search-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Input Editor */
