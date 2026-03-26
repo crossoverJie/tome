@@ -17,9 +17,19 @@ export interface Block {
   startTime: number;
   endTime: number | null;
   isComplete: boolean;
+  isCollapsed: boolean;
 }
 
 type Phase = "prompt" | "input" | "running" | "idle";
+
+export interface SearchResult {
+  blockId: string;
+  blockIndex: number;
+  matchIndex: number;
+  start: number;
+  end: number;
+  text: string;
+}
 
 type TerminalEvent =
   | { kind: "output"; session_id: string; data: string }
@@ -38,6 +48,16 @@ interface UseTerminalSessionReturn {
   selectBlock: (index: number | null) => void;
   selectPrevBlock: () => void;
   selectNextBlock: () => void;
+  // Collapse
+  toggleBlockCollapse: (blockId: string) => void;
+  // Search
+  searchQuery: string;
+  searchResults: SearchResult[];
+  currentSearchIndex: number;
+  setSearchQuery: (query: string) => void;
+  nextSearchResult: () => void;
+  prevSearchResult: () => void;
+  clearSearch: () => void;
 }
 
 export function useTerminalSession(
@@ -66,6 +86,11 @@ export function useTerminalSession(
   const currentCommandRef = useRef("");
   const pendingCommandRef = useRef("");
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
+
+  // Search state
+  const [searchQuery, setSearchQueryState] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(-1);
 
   // Persist state whenever it changes
   useEffect(() => {
@@ -164,6 +189,7 @@ export function useTerminalSession(
                     startTime: Date.now(),
                     endTime: null,
                     isComplete: false,
+                    isCollapsed: false,
                   },
                 ]);
                 break;
@@ -226,6 +252,92 @@ export function useTerminalSession(
 
   const clearBlocks = useCallback(() => {
     setBlocks([]);
+    blockIdCounter.current = 0;
+  }, []);
+
+  const toggleBlockCollapse = useCallback((blockId: string) => {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === blockId ? { ...b, isCollapsed: !b.isCollapsed } : b))
+    );
+  }, []);
+
+  // Helper to strip ANSI escape sequences from text
+  const stripAnsi = useCallback((text: string): string => {
+    // ANSI escape sequence pattern: \x1b\[([0-9;]*[mK])
+    return text.replace(/\x1b\[[0-9;]*[mK]/g, "");
+  }, []);
+
+  // Search functionality
+  const setSearchQuery = useCallback((query: string) => {
+    setSearchQueryState(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      setCurrentSearchIndex(-1);
+      return;
+    }
+
+    // Compute search results across all blocks (search in plain text, not ANSI)
+    const results: SearchResult[] = [];
+    const lowerQuery = query.toLowerCase();
+
+    setBlocks((currentBlocks) => {
+      currentBlocks.forEach((block, blockIndex) => {
+        // Search in command (no ANSI sequences expected here)
+        const commandPlain = block.command;
+        const commandPlainLower = commandPlain.toLowerCase();
+        let matchIndex = 0;
+        let pos = 0;
+
+        while ((pos = commandPlainLower.indexOf(lowerQuery, pos)) !== -1) {
+          results.push({
+            blockId: block.id,
+            blockIndex,
+            matchIndex: matchIndex++,
+            start: pos,
+            end: pos + query.length,
+            text: commandPlain.slice(pos, pos + query.length),
+          });
+          pos += 1;
+        }
+
+        // Search in output (strip ANSI sequences first)
+        const outputPlain = stripAnsi(block.output);
+        const outputPlainLower = outputPlain.toLowerCase();
+        pos = 0;
+
+        while ((pos = outputPlainLower.indexOf(lowerQuery, pos)) !== -1) {
+          results.push({
+            blockId: block.id,
+            blockIndex,
+            matchIndex: matchIndex++,
+            start: pos, // Position in plain text (without ANSI)
+            end: pos + query.length,
+            text: outputPlain.slice(pos, pos + query.length),
+          });
+          pos += 1;
+        }
+      });
+      return currentBlocks;
+    });
+
+    setSearchResults(results);
+    setCurrentSearchIndex(results.length > 0 ? 0 : -1);
+  }, []);
+
+  const nextSearchResult = useCallback(() => {
+    if (searchResults.length === 0) return;
+    setCurrentSearchIndex((prev) => (prev + 1) % searchResults.length);
+  }, [searchResults.length]);
+
+  const prevSearchResult = useCallback(() => {
+    if (searchResults.length === 0) return;
+    setCurrentSearchIndex((prev) => (prev - 1 + searchResults.length) % searchResults.length);
+  }, [searchResults.length]);
+
+  const clearSearch = useCallback(() => {
+    setSearchQueryState("");
+    setSearchResults([]);
+    setCurrentSearchIndex(-1);
   }, []);
 
   const selectBlock = useCallback((index: number | null) => {
@@ -261,5 +373,15 @@ export function useTerminalSession(
     selectBlock,
     selectPrevBlock,
     selectNextBlock,
+    // Collapse
+    toggleBlockCollapse,
+    // Search
+    searchQuery,
+    searchResults,
+    currentSearchIndex,
+    setSearchQuery,
+    nextSearchResult,
+    prevSearchResult,
+    clearSearch,
   };
 }
