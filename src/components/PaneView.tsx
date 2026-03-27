@@ -22,6 +22,7 @@ export function PaneView({
 }: PaneViewProps) {
   const {
     blocks,
+    isInputReady,
     isAlternateScreen,
     rawOutput,
     currentDirectory,
@@ -166,7 +167,7 @@ export function PaneView({
           <InputEditor
             onSubmit={handleSubmit}
             onRequestCompletion={requestCompletion}
-            disabled={!isFocused || isAlternateScreen}
+            disabled={!isFocused || isAlternateScreen || !isInputReady}
             gitBranch={gitBranch}
           />
         </>

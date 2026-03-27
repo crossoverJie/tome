@@ -45,12 +45,37 @@ export function InputEditor({
   const savedInputRef = useRef("");
   const requestSequenceRef = useRef(0);
   const applyingCompletionRef = useRef(false);
+  const disabledRef = useRef(Boolean(disabled));
+  const historyRef = useRef(history);
+  const addCommandRef = useRef(addCommand);
+  const onSubmitRef = useRef(onSubmit);
+  const onRequestCompletionRef = useRef(onRequestCompletion);
   const [completionState, setCompletionState] = useState<CompletionState>(EMPTY_COMPLETION_STATE);
   const completionStateRef = useRef(completionState);
 
   useEffect(() => {
     completionStateRef.current = completionState;
   }, [completionState]);
+
+  useEffect(() => {
+    disabledRef.current = Boolean(disabled);
+  }, [disabled]);
+
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  useEffect(() => {
+    addCommandRef.current = addCommand;
+  }, [addCommand]);
+
+  useEffect(() => {
+    onSubmitRef.current = onSubmit;
+  }, [onSubmit]);
+
+  useEffect(() => {
+    onRequestCompletionRef.current = onRequestCompletion;
+  }, [onRequestCompletion]);
 
   // Focus editor when enabled (pane becomes focused)
   useEffect(() => {
@@ -121,6 +146,10 @@ export function InputEditor({
 
   const handleSubmit = useCallback(
     (view: EditorView) => {
+      if (disabledRef.current) {
+        return true;
+      }
+
       if (completionStateRef.current.open) {
         const handled = applySelectedCompletion(view);
         if (handled) {
@@ -132,12 +161,12 @@ export function InputEditor({
 
       const value = view.state.doc.toString();
       if (value.trim()) {
-        onSubmit(value + "\n");
-        addCommand(value);
+        onSubmitRef.current(value + "\n");
+        void addCommandRef.current(value);
         historyIndexRef.current = -1;
         savedInputRef.current = "";
       } else {
-        onSubmit("\n");
+        onSubmitRef.current("\n");
       }
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: "" },
@@ -145,7 +174,7 @@ export function InputEditor({
       closeCompletion();
       return true;
     },
-    [addCommand, applySelectedCompletion, closeCompletion, onSubmit]
+    [applySelectedCompletion, closeCompletion]
   );
 
   const handleHistoryUp = useCallback(
@@ -155,16 +184,16 @@ export function InputEditor({
         return true;
       }
 
-      if (history.length === 0) return false;
+      if (historyRef.current.length === 0) return false;
       if (historyIndexRef.current === -1) {
         savedInputRef.current = view.state.doc.toString();
-        historyIndexRef.current = history.length - 1;
+        historyIndexRef.current = historyRef.current.length - 1;
       } else if (historyIndexRef.current > 0) {
         historyIndexRef.current--;
       } else {
         return true;
       }
-      const cmd = history[historyIndexRef.current];
+      const cmd = historyRef.current[historyIndexRef.current];
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: cmd },
         selection: { anchor: cmd.length },
@@ -172,7 +201,7 @@ export function InputEditor({
       closeCompletion();
       return true;
     },
-    [closeCompletion, history, moveCompletionSelection]
+    [closeCompletion, moveCompletionSelection]
   );
 
   const handleHistoryDown = useCallback(
@@ -185,11 +214,11 @@ export function InputEditor({
       if (historyIndexRef.current === -1) return false;
       historyIndexRef.current++;
       let text: string;
-      if (historyIndexRef.current >= history.length) {
+      if (historyIndexRef.current >= historyRef.current.length) {
         historyIndexRef.current = -1;
         text = savedInputRef.current;
       } else {
-        text = history[historyIndexRef.current];
+        text = historyRef.current[historyIndexRef.current];
       }
       view.dispatch({
         changes: { from: 0, to: view.state.doc.length, insert: text },
@@ -198,12 +227,12 @@ export function InputEditor({
       closeCompletion();
       return true;
     },
-    [closeCompletion, history, moveCompletionSelection]
+    [closeCompletion, moveCompletionSelection]
   );
 
   const requestEditorCompletion = useCallback(
     (view: EditorView) => {
-      if (disabled) {
+      if (disabledRef.current) {
         return false;
       }
 
@@ -211,7 +240,8 @@ export function InputEditor({
       const cursor = view.state.selection.main.head;
       const requestId = ++requestSequenceRef.current;
 
-      void onRequestCompletion(text, cursor)
+      void onRequestCompletionRef
+        .current(text, cursor)
         .then((response) => {
           if (requestSequenceRef.current !== requestId) {
             return;
@@ -257,7 +287,7 @@ export function InputEditor({
 
       return true;
     },
-    [applyCompletion, closeCompletion, disabled, onRequestCompletion]
+    [applyCompletion, closeCompletion]
   );
 
   const handleTab = useCallback(
