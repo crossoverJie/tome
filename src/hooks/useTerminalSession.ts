@@ -107,7 +107,13 @@ export function useTerminalSession(
   // Persist state whenever it changes
   useEffect(() => {
     if (sessionId) {
-      updateSessionState(sessionId, { blocks, isAlternateScreen, rawOutput, currentDirectory, gitBranch });
+      updateSessionState(sessionId, {
+        blocks,
+        isAlternateScreen,
+        rawOutput,
+        currentDirectory,
+        gitBranch,
+      });
     }
   }, [sessionId, blocks, isAlternateScreen, rawOutput, currentDirectory, gitBranch]);
 

@@ -5,7 +5,7 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
@@ -26,7 +26,10 @@ pub enum TerminalEvent {
     #[serde(rename = "current_directory")]
     CurrentDirectory { session_id: String, path: String },
     #[serde(rename = "git_branch")]
-    GitBranch { session_id: String, branch: Option<String> },
+    GitBranch {
+        session_id: String,
+        branch: Option<String>,
+    },
 }
 
 struct PtySession {
@@ -284,7 +287,7 @@ fn resolve_initial_cwd(initial_cwd: Option<String>) -> Result<PathBuf, String> {
 
 /// Get the current git branch name for a given directory
 /// Returns None if not in a git repository
-fn get_git_branch(dir: &PathBuf) -> Option<String> {
+fn get_git_branch(dir: &Path) -> Option<String> {
     // Try to read .git/HEAD directly (faster than running git command)
     let git_head = dir.join(".git/HEAD");
     if git_head.exists() {
@@ -302,7 +305,7 @@ fn get_git_branch(dir: &PathBuf) -> Option<String> {
     }
 
     // Fallback: walk up parent directories looking for .git
-    let mut current = dir.as_path();
+    let mut current = dir;
     loop {
         let parent_git = current.join(".git/HEAD");
         if parent_git.exists() {

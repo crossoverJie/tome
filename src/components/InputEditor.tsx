@@ -32,7 +32,12 @@ const EMPTY_COMPLETION_STATE: CompletionState = {
   replaceTo: 0,
 };
 
-export function InputEditor({ onSubmit, onRequestCompletion, disabled, gitBranch }: InputEditorProps) {
+export function InputEditor({
+  onSubmit,
+  onRequestCompletion,
+  disabled,
+  gitBranch,
+}: InputEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const { history, addCommand } = useCommandHistory();
