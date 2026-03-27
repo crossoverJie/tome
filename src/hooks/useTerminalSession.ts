@@ -2,11 +2,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import {
+  getPaneSessionInitOptions,
   getSessionState,
-  setSessionState,
-  updateSessionState,
   getSessionIdForPane,
+  removePaneSessionInitOptions,
+  setSessionState,
   setSessionIdForPane,
+  updateSessionState,
 } from "./sessionState";
 import type { CompletionResponse } from "../types/completion";
 
@@ -111,128 +113,136 @@ export function useTerminalSession(
     if (hasInitialized.current) {
       return;
     }
+    hasInitialized.current = true;
 
     let unlisten: UnlistenFn | undefined;
 
     async function init() {
-      // Determine the session ID to use
-      let sid: string;
+      try {
+        // Determine the session ID to use
+        let sid: string;
 
-      if (sessionId) {
-        // Use existing session ID
-        sid = sessionId;
-      } else {
-        // Create new session
-        sid = await invoke<string>("create_session");
-        setSessionIdState(sid);
+        if (sessionId) {
+          // Use existing session ID
+          sid = sessionId;
+        } else {
+          // Create new session
+          const initialCwd = paneId ? getPaneSessionInitOptions(paneId)?.initialCwd : undefined;
+          sid = initialCwd
+            ? await invoke<string>("create_session", { initialCwd })
+            : await invoke<string>("create_session");
+          setSessionIdState(sid);
 
-        // Register session ID for this pane
-        if (paneId) {
-          setSessionIdForPane(paneId, sid);
-        }
-
-        // Initialize session state
-        setSessionState(sid, {
-          sessionId: sid,
-          blocks: [],
-          isAlternateScreen: false,
-          rawOutput: "",
-          currentDirectory: null,
-        });
-      }
-
-      const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
-      setCurrentDirectory(cwd);
-
-      hasInitialized.current = true;
-
-      // Set up event listener for this session
-      unlisten = await listen<TerminalEvent>("terminal-event", (event) => {
-        const payload = event.payload;
-        if (payload.session_id !== sid) return;
-
-        switch (payload.kind) {
-          case "output": {
-            const data = payload.data;
-            setRawOutput((prev) => prev + data);
-
-            // Only append output to block when a command is running
-            if (phaseRef.current !== "running") return;
-
-            setBlocks((prev) => {
-              const last = prev[prev.length - 1];
-              if (last && !last.isComplete) {
-                const updated = [...prev];
-                updated[updated.length - 1] = {
-                  ...last,
-                  output: last.output + data,
-                };
-                return updated;
-              }
-              return prev;
-            });
-            break;
+          // Register session ID for this pane
+          if (paneId) {
+            setSessionIdForPane(paneId, sid);
+            removePaneSessionInitOptions(paneId);
           }
 
-          case "block": {
-            const { event_type, exit_code } = payload;
+          // Initialize session state
+          setSessionState(sid, {
+            sessionId: sid,
+            blocks: [],
+            isAlternateScreen: false,
+            rawOutput: "",
+            currentDirectory: null,
+          });
+        }
 
-            switch (event_type) {
-              case "prompt_start":
-                phaseRef.current = "prompt";
-                break;
-              case "input_start":
-                phaseRef.current = "input";
-                currentCommandRef.current = "";
-                break;
-              case "command_start": {
-                phaseRef.current = "running";
-                const cmd = pendingCommandRef.current || currentCommandRef.current;
-                pendingCommandRef.current = "";
-                const id = `block-${++blockIdCounter.current}`;
-                setBlocks((prev) => [
-                  ...prev,
-                  {
-                    id,
-                    command: cmd,
-                    output: "",
-                    exitCode: null,
-                    startTime: Date.now(),
-                    endTime: null,
-                    isComplete: false,
-                    isCollapsed: false,
-                  },
-                ]);
-                break;
-              }
-              case "command_end":
-                phaseRef.current = "idle";
-                setBlocks((prev) => {
-                  if (prev.length === 0) return prev;
+        const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
+        setCurrentDirectory(cwd);
+
+        // Set up event listener for this session
+        unlisten = await listen<TerminalEvent>("terminal-event", (event) => {
+          const payload = event.payload;
+          if (payload.session_id !== sid) return;
+
+          switch (payload.kind) {
+            case "output": {
+              const data = payload.data;
+              setRawOutput((prev) => prev + data);
+
+              // Only append output to block when a command is running
+              if (phaseRef.current !== "running") return;
+
+              setBlocks((prev) => {
+                const last = prev[prev.length - 1];
+                if (last && !last.isComplete) {
                   const updated = [...prev];
-                  const last = { ...updated[updated.length - 1] };
-                  last.exitCode = exit_code;
-                  last.endTime = Date.now();
-                  last.isComplete = true;
-                  updated[updated.length - 1] = last;
+                  updated[updated.length - 1] = {
+                    ...last,
+                    output: last.output + data,
+                  };
                   return updated;
-                });
-                break;
+                }
+                return prev;
+              });
+              break;
             }
-            break;
-          }
 
-          case "alternate_screen":
-            setIsAlternateScreen(payload.active);
-            break;
-          case "current_directory":
-            setCurrentDirectory(payload.path);
-            break;
-        }
-      });
+            case "block": {
+              const { event_type, exit_code } = payload;
+
+              switch (event_type) {
+                case "prompt_start":
+                  phaseRef.current = "prompt";
+                  break;
+                case "input_start":
+                  phaseRef.current = "input";
+                  currentCommandRef.current = "";
+                  break;
+                case "command_start": {
+                  phaseRef.current = "running";
+                  const cmd = pendingCommandRef.current || currentCommandRef.current;
+                  pendingCommandRef.current = "";
+                  const id = `block-${++blockIdCounter.current}`;
+                  setBlocks((prev) => [
+                    ...prev,
+                    {
+                      id,
+                      command: cmd,
+                      output: "",
+                      exitCode: null,
+                      startTime: Date.now(),
+                      endTime: null,
+                      isComplete: false,
+                      isCollapsed: false,
+                    },
+                  ]);
+                  break;
+                }
+                case "command_end":
+                  phaseRef.current = "idle";
+                  setBlocks((prev) => {
+                    if (prev.length === 0) return prev;
+                    const updated = [...prev];
+                    const last = { ...updated[updated.length - 1] };
+                    last.exitCode = exit_code;
+                    last.endTime = Date.now();
+                    last.isComplete = true;
+                    updated[updated.length - 1] = last;
+                    return updated;
+                  });
+                  break;
+              }
+              break;
+            }
+
+            case "alternate_screen":
+              setIsAlternateScreen(payload.active);
+              break;
+            case "current_directory":
+              setCurrentDirectory(payload.path);
+              break;
+          }
+        });
+      } catch (error) {
+        hasInitialized.current = false;
+        console.error("Failed to initialize terminal session", error);
+      }
     }
 
-    init();
+    void init();
     return () => {
       unlisten?.();
     };

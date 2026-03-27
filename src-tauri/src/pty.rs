@@ -45,9 +45,14 @@ impl PtyManager {
         }
     }
 
-    pub fn create_session(&self, app: AppHandle) -> Result<String, String> {
+    pub fn create_session(
+        &self,
+        app: AppHandle,
+        initial_cwd: Option<String>,
+    ) -> Result<String, String> {
         let session_id = Uuid::new_v4().to_string();
         let pty_system = native_pty_system();
+        let initial_dir = resolve_initial_cwd(initial_cwd)?;
 
         let pair = pty_system
             .openpty(PtySize {
@@ -61,6 +66,7 @@ impl PtyManager {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         let mut cmd = CommandBuilder::new(&shell);
         cmd.arg("--login");
+        cmd.cwd(&initial_dir);
 
         // Set TERM_PROGRAM so shell integration can detect us
         cmd.env("TERM_PROGRAM", "tome");
@@ -105,9 +111,7 @@ impl PtyManager {
             .map_err(|e| format!("Failed to get PTY reader: {}", e))?;
 
         let sid = session_id.clone();
-        let current_dir = Arc::new(Mutex::new(
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
-        ));
+        let current_dir = Arc::new(Mutex::new(initial_dir));
         let current_dir_for_reader = Arc::clone(&current_dir);
 
         // Spawn reader thread
@@ -225,6 +229,31 @@ impl PtyManager {
             .clone();
 
         Ok(current_dir.to_string_lossy().to_string())
+    }
+}
+
+fn resolve_initial_cwd(initial_cwd: Option<String>) -> Result<PathBuf, String> {
+    match initial_cwd {
+        Some(path) => {
+            let resolved = PathBuf::from(path);
+            if !resolved.exists() {
+                return Err(format!(
+                    "Initial cwd does not exist: {}",
+                    resolved.to_string_lossy()
+                ));
+            }
+
+            if !resolved.is_dir() {
+                return Err(format!(
+                    "Initial cwd is not a directory: {}",
+                    resolved.to_string_lossy()
+                ));
+            }
+
+            Ok(resolved)
+        }
+        None => std::env::current_dir()
+            .map_err(|e| format!("Failed to determine current directory: {}", e)),
     }
 }
 
@@ -492,6 +521,37 @@ mod tests {
             parse_tome_osc(&format!("P;{encoded}")),
             Some("/tmp/project".to_string())
         );
+    }
+
+    #[test]
+    fn resolve_initial_cwd_uses_process_cwd_by_default() {
+        let resolved = resolve_initial_cwd(None).unwrap();
+        assert_eq!(resolved, std::env::current_dir().unwrap());
+    }
+
+    #[test]
+    fn resolve_initial_cwd_accepts_existing_directory() {
+        let temp_dir = std::env::temp_dir();
+        let resolved = resolve_initial_cwd(Some(temp_dir.to_string_lossy().to_string())).unwrap();
+        assert_eq!(resolved, temp_dir);
+    }
+
+    #[test]
+    fn resolve_initial_cwd_rejects_missing_directory() {
+        let missing = std::env::temp_dir().join(format!("tome-missing-{}", Uuid::new_v4()));
+        let err = resolve_initial_cwd(Some(missing.to_string_lossy().to_string())).unwrap_err();
+        assert!(err.contains("does not exist"));
+    }
+
+    #[test]
+    fn resolve_initial_cwd_rejects_files() {
+        let temp_file = std::env::temp_dir().join(format!("tome-file-{}.txt", Uuid::new_v4()));
+        std::fs::write(&temp_file, "test").unwrap();
+
+        let err = resolve_initial_cwd(Some(temp_file.to_string_lossy().to_string())).unwrap_err();
+        assert!(err.contains("not a directory"));
+
+        std::fs::remove_file(temp_file).unwrap();
     }
 
     // --- OutputParser tests ---

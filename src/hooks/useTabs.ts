@@ -9,7 +9,11 @@ import {
 } from "../types/pane";
 import type { Tab } from "../types/tab";
 import { createTab as createTabData } from "../types/tab";
-import { removeSessionState, removePaneMapping } from "./sessionState";
+import {
+  removePaneMapping,
+  removePaneSessionInitOptions,
+  removeSessionState,
+} from "./sessionState";
 
 export interface UseTabsReturn {
   // Tab operations
@@ -94,6 +98,7 @@ export function useTabs(): UseTabsReturn {
         }
         if (pane.type === "leaf") {
           removePaneMapping(pane.id);
+          removePaneSessionInitOptions(pane.id);
         }
       }
 
@@ -216,6 +221,10 @@ export function useTabs(): UseTabsReturn {
         panes: result.panes,
         focusedPaneId: newFocusedPaneId,
       }));
+
+      result.removedSessionIds.forEach((sessionId) => removeSessionState(sessionId));
+      removePaneMapping(paneId);
+      removePaneSessionInitOptions(paneId);
 
       return {
         removedSessionIds: result.removedSessionIds,

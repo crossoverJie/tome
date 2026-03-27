@@ -5,6 +5,7 @@ import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
 import { useTabs } from "./hooks/useTabs";
+import { setPaneSessionInitOptions } from "./hooks/sessionState";
 import { getTabCurrentDirectory, getTabDisplayTitle, getWindowTitle } from "./utils/workdir";
 import "./App.css";
 
@@ -69,6 +70,25 @@ function App() {
     [activeTab, paneDirectoryMap]
   );
 
+  const handleSplitPane = useCallback(
+    (direction: "horizontal" | "vertical") => {
+      if (!focusedPaneId) {
+        return;
+      }
+
+      const newPaneId = splitPane(focusedPaneId, direction);
+      if (!newPaneId) {
+        return;
+      }
+
+      const sourceCwd = paneDirectoryMap.get(focusedPaneId) ?? null;
+      if (sourceCwd) {
+        setPaneSessionInitOptions(newPaneId, { initialCwd: sourceCwd });
+      }
+    },
+    [focusedPaneId, paneDirectoryMap, splitPane]
+  );
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -109,18 +129,14 @@ function App() {
       // Split horizontally: Cmd+D
       if (e.metaKey && e.key === "d" && !e.shiftKey) {
         e.preventDefault();
-        if (focusedPaneId) {
-          splitPane(focusedPaneId, "horizontal");
-        }
+        handleSplitPane("horizontal");
         return;
       }
 
       // Split vertically: Cmd+Shift+D
       if (e.metaKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
         e.preventDefault();
-        if (focusedPaneId) {
-          splitPane(focusedPaneId, "vertical");
-        }
+        handleSplitPane("vertical");
         return;
       }
 
@@ -167,7 +183,7 @@ function App() {
   }, [
     createTab,
     switchTabByIndex,
-    splitPane,
+    handleSplitPane,
     closePane,
     focusPane,
     focusNextPane,

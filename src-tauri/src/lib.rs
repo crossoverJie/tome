@@ -11,8 +11,12 @@ struct AppState {
 }
 
 #[tauri::command]
-fn create_session(app: tauri::AppHandle, state: State<AppState>) -> Result<String, String> {
-    state.pty_manager.create_session(app)
+fn create_session(
+    app: tauri::AppHandle,
+    state: State<AppState>,
+    initial_cwd: Option<String>,
+) -> Result<String, String> {
+    state.pty_manager.create_session(app, initial_cwd)
 }
 
 #[tauri::command]

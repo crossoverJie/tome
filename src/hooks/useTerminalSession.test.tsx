@@ -1,6 +1,7 @@
+import { StrictMode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAllSessionState } from "./sessionState";
+import { clearAllSessionState, setPaneSessionInitOptions } from "./sessionState";
 import { useTerminalSession } from "./useTerminalSession";
 
 type TerminalEventPayload =
@@ -83,5 +84,44 @@ describe("useTerminalSession", () => {
     await waitFor(() => {
       expect(result.current.currentDirectory).toBe("/tmp/next-project");
     });
+  });
+
+  it("passes a pending initial cwd when creating a split session", async () => {
+    setPaneSessionInitOptions("pane-split", { initialCwd: "/tmp/source-pane" });
+
+    const { result } = renderHook(() => useTerminalSession("pane-split"), {
+      wrapper: ({ children }) => <StrictMode>{children}</StrictMode>,
+    });
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    const createSessionCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === "create_session"
+    );
+    expect(createSessionCalls).toEqual([["create_session", { initialCwd: "/tmp/source-pane" }]]);
+  });
+
+  it("consumes pending initial cwd only once per pane", async () => {
+    setPaneSessionInitOptions("pane-once", { initialCwd: "/tmp/source-pane" });
+
+    const firstRender = renderHook(() => useTerminalSession("pane-once"));
+    await waitFor(() => {
+      expect(firstRender.result.current.sessionId).toBe("session-1");
+    });
+    firstRender.unmount();
+
+    clearAllSessionState();
+    terminalEventListener = undefined;
+    invokeMock.mockClear();
+    listenMock.mockClear();
+
+    const secondRender = renderHook(() => useTerminalSession("pane-once"));
+    await waitFor(() => {
+      expect(secondRender.result.current.sessionId).toBe("session-1");
+    });
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "create_session");
   });
 });
