@@ -274,16 +274,23 @@ body {
   font-weight: bold;
   padding: 8px 8px 8px 0;
   user-select: none;
+  white-space: nowrap;
+}
+
+.input-prompt .git-branch {
+  color: var(--text-secondary);
+  font-weight: normal;
 }
 
 .input-editor-container {
   flex: 1;
+  position: relative;
 }
 
 .completion-menu {
   position: absolute;
-  left: 44px;
-  right: 12px;
+  left: 0;
+  right: 0;
   bottom: calc(100% - 4px);
   max-height: 220px;
   overflow-y: auto;

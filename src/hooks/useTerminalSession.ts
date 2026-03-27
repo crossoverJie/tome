@@ -38,7 +38,8 @@ type TerminalEvent =
   | { kind: "output"; session_id: string; data: string }
   | { kind: "block"; session_id: string; event_type: string; exit_code: number | null }
   | { kind: "alternate_screen"; session_id: string; active: boolean }
-  | { kind: "current_directory"; session_id: string; path: string };
+  | { kind: "current_directory"; session_id: string; path: string }
+  | { kind: "git_branch"; session_id: string; branch: string | null };
 
 interface UseTerminalSessionReturn {
   sessionId: string | null;
@@ -46,6 +47,7 @@ interface UseTerminalSessionReturn {
   isAlternateScreen: boolean;
   rawOutput: string;
   currentDirectory: string | null;
+  gitBranch: string | null;
   sendInput: (data: string) => void;
   requestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   resizePty: (cols: number, rows: number) => void;
@@ -90,6 +92,7 @@ export function useTerminalSession(
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(
     persistedState?.currentDirectory || null
   );
+  const [gitBranch, setGitBranch] = useState<string | null>(persistedState?.gitBranch || null);
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const currentCommandRef = useRef("");
@@ -104,9 +107,15 @@ export function useTerminalSession(
   // Persist state whenever it changes
   useEffect(() => {
     if (sessionId) {
-      updateSessionState(sessionId, { blocks, isAlternateScreen, rawOutput, currentDirectory });
+      updateSessionState(sessionId, {
+        blocks,
+        isAlternateScreen,
+        rawOutput,
+        currentDirectory,
+        gitBranch,
+      });
     }
-  }, [sessionId, blocks, isAlternateScreen, rawOutput, currentDirectory]);
+  }, [sessionId, blocks, isAlternateScreen, rawOutput, currentDirectory, gitBranch]);
 
   useEffect(() => {
     // Prevent double initialization
@@ -146,6 +155,7 @@ export function useTerminalSession(
             isAlternateScreen: false,
             rawOutput: "",
             currentDirectory: null,
+            gitBranch: null,
           });
         }
 
@@ -233,6 +243,9 @@ export function useTerminalSession(
               break;
             case "current_directory":
               setCurrentDirectory(payload.path);
+              break;
+            case "git_branch":
+              setGitBranch(payload.branch);
               break;
           }
         });
@@ -411,6 +424,7 @@ export function useTerminalSession(
     isAlternateScreen,
     rawOutput,
     currentDirectory,
+    gitBranch,
     sendInput,
     requestCompletion,
     resizePty,
