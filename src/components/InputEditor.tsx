@@ -13,6 +13,7 @@ interface InputEditorProps {
   onSubmit: (command: string) => void;
   onRequestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   disabled?: boolean;
+  gitBranch?: string | null;
 }
 
 interface CompletionState {
@@ -31,7 +32,7 @@ const EMPTY_COMPLETION_STATE: CompletionState = {
   replaceTo: 0,
 };
 
-export function InputEditor({ onSubmit, onRequestCompletion, disabled }: InputEditorProps) {
+export function InputEditor({ onSubmit, onRequestCompletion, disabled, gitBranch }: InputEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const { history, addCommand } = useCommandHistory();
@@ -397,25 +398,28 @@ export function InputEditor({ onSubmit, onRequestCompletion, disabled }: InputEd
 
   return (
     <div className={`input-editor ${disabled ? "disabled" : ""}`}>
-      <span className="input-prompt">$</span>
-      <div className="input-editor-container" ref={containerRef} />
-      {completionState.open && (
-        <div className="completion-menu" role="listbox" aria-label="Completion suggestions">
-          {completionState.items.map((item, index) => (
-            <button
-              key={`${item.kind}-${item.value}`}
-              type="button"
-              className={`completion-menu-item ${
-                index === completionState.selectedIndex ? "selected" : ""
-              }`}
-              onMouseDown={handleMenuItemMouseDown(index)}
-            >
-              <span className="completion-menu-value">{item.display}</span>
-              <span className="completion-menu-kind">{item.kind}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <span className="input-prompt">
+        ${gitBranch ? <span className="git-branch"> ({gitBranch})</span> : ""}
+      </span>
+      <div className="input-editor-container" ref={containerRef}>
+        {completionState.open && (
+          <div className="completion-menu" role="listbox" aria-label="Completion suggestions">
+            {completionState.items.map((item, index) => (
+              <button
+                key={`${item.kind}-${item.value}`}
+                type="button"
+                className={`completion-menu-item ${
+                  index === completionState.selectedIndex ? "selected" : ""
+                }`}
+                onMouseDown={handleMenuItemMouseDown(index)}
+              >
+                <span className="completion-menu-value">{item.display}</span>
+                <span className="completion-menu-kind">{item.kind}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

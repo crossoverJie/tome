@@ -25,6 +25,8 @@ pub enum TerminalEvent {
     AlternateScreen { session_id: String, active: bool },
     #[serde(rename = "current_directory")]
     CurrentDirectory { session_id: String, path: String },
+    #[serde(rename = "git_branch")]
+    GitBranch { session_id: String, branch: Option<String> },
 }
 
 struct PtySession {
@@ -111,7 +113,7 @@ impl PtyManager {
             .map_err(|e| format!("Failed to get PTY reader: {}", e))?;
 
         let sid = session_id.clone();
-        let current_dir = Arc::new(Mutex::new(initial_dir));
+        let current_dir = Arc::new(Mutex::new(initial_dir.clone()));
         let current_dir_for_reader = Arc::clone(&current_dir);
 
         // Spawn reader thread
@@ -127,33 +129,56 @@ impl PtyManager {
                         let events = parser.parse(&data);
 
                         for event in events {
-                            let te = match event {
-                                ParsedEvent::Output(text) => TerminalEvent::Output {
-                                    session_id: sid.clone(),
-                                    data: text,
-                                },
-                                ParsedEvent::Block(block_event) => TerminalEvent::Block {
-                                    session_id: sid.clone(),
-                                    event_type: block_event.event_type,
-                                    exit_code: block_event.exit_code,
-                                },
+                            match event {
+                                ParsedEvent::Output(text) => {
+                                    let _ = app.emit(
+                                        "terminal-event",
+                                        TerminalEvent::Output {
+                                            session_id: sid.clone(),
+                                            data: text,
+                                        },
+                                    );
+                                }
+                                ParsedEvent::Block(block_event) => {
+                                    let _ = app.emit(
+                                        "terminal-event",
+                                        TerminalEvent::Block {
+                                            session_id: sid.clone(),
+                                            event_type: block_event.event_type,
+                                            exit_code: block_event.exit_code,
+                                        },
+                                    );
+                                }
                                 ParsedEvent::AlternateScreen(active) => {
-                                    TerminalEvent::AlternateScreen {
-                                        session_id: sid.clone(),
-                                        active,
-                                    }
+                                    let _ = app.emit(
+                                        "terminal-event",
+                                        TerminalEvent::AlternateScreen {
+                                            session_id: sid.clone(),
+                                            active,
+                                        },
+                                    );
                                 }
                                 ParsedEvent::CurrentDirectory(path) => {
+                                    let new_branch = get_git_branch(&PathBuf::from(&path));
                                     if let Ok(mut cwd) = current_dir_for_reader.lock() {
                                         *cwd = PathBuf::from(&path);
                                     }
-                                    TerminalEvent::CurrentDirectory {
-                                        session_id: sid.clone(),
-                                        path,
-                                    }
+                                    let _ = app.emit(
+                                        "terminal-event",
+                                        TerminalEvent::CurrentDirectory {
+                                            session_id: sid.clone(),
+                                            path,
+                                        },
+                                    );
+                                    let _ = app.emit(
+                                        "terminal-event",
+                                        TerminalEvent::GitBranch {
+                                            session_id: sid.clone(),
+                                            branch: new_branch,
+                                        },
+                                    );
                                 }
-                            };
-                            let _ = app.emit("terminal-event", te);
+                            }
                         }
                     }
                     Err(_) => break,
@@ -255,6 +280,50 @@ fn resolve_initial_cwd(initial_cwd: Option<String>) -> Result<PathBuf, String> {
         None => std::env::current_dir()
             .map_err(|e| format!("Failed to determine current directory: {}", e)),
     }
+}
+
+/// Get the current git branch name for a given directory
+/// Returns None if not in a git repository
+fn get_git_branch(dir: &PathBuf) -> Option<String> {
+    // Try to read .git/HEAD directly (faster than running git command)
+    let git_head = dir.join(".git/HEAD");
+    if git_head.exists() {
+        if let Ok(content) = std::fs::read_to_string(&git_head) {
+            let content = content.trim();
+            // HEAD contains: ref: refs/heads/main
+            if let Some(branch_ref) = content.strip_prefix("ref: refs/heads/") {
+                return Some(branch_ref.to_string());
+            }
+            // Detached HEAD contains just the commit hash
+            if content.len() == 40 && content.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Some(format!("{}...", &content[..7]));
+            }
+        }
+    }
+
+    // Fallback: walk up parent directories looking for .git
+    let mut current = dir.as_path();
+    loop {
+        let parent_git = current.join(".git/HEAD");
+        if parent_git.exists() {
+            if let Ok(content) = std::fs::read_to_string(&parent_git) {
+                let content = content.trim();
+                if let Some(branch_ref) = content.strip_prefix("ref: refs/heads/") {
+                    return Some(branch_ref.to_string());
+                }
+                if content.len() == 40 && content.chars().all(|c| c.is_ascii_hexdigit()) {
+                    return Some(format!("{}...", &content[..7]));
+                }
+            }
+        }
+
+        match current.parent() {
+            Some(parent) => current = parent,
+            None => break,
+        }
+    }
+
+    None
 }
 
 // --- Output Parser ---

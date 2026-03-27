@@ -25,6 +25,7 @@ export function PaneView({
     isAlternateScreen,
     rawOutput,
     currentDirectory,
+    gitBranch,
     sendInput,
     requestCompletion,
     resizePty,
@@ -166,6 +167,7 @@ export function PaneView({
             onSubmit={handleSubmit}
             onRequestCompletion={requestCompletion}
             disabled={!isFocused || isAlternateScreen}
+            gitBranch={gitBranch}
           />
         </>
       )}

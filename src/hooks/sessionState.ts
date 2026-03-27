@@ -6,6 +6,7 @@ interface SessionState {
   isAlternateScreen: boolean;
   rawOutput: string;
   currentDirectory: string | null;
+  gitBranch: string | null;
 }
 
 export interface PaneSessionInitOptions {
