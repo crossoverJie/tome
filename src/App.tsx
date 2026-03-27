@@ -1,15 +1,18 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
 import { useTabs } from "./hooks/useTabs";
+import { getTabCurrentDirectory, getTabDisplayTitle, getWindowTitle } from "./utils/workdir";
 import "./App.css";
 
 function App() {
   const {
     tabs,
     activeTabId,
+    activeTab,
     createTab,
     closeTab,
     switchTab,
@@ -27,6 +30,7 @@ function App() {
   const [blockSelectionMap, setBlockSelectionMap] = useState<
     Map<string, { index: number | null; blocks: unknown[] }>
   >(new Map());
+  const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Get the currently focused pane's block info for copy command
@@ -34,6 +38,36 @@ function App() {
     if (!focusedPaneId) return null;
     return blockSelectionMap.get(focusedPaneId) || null;
   }, [focusedPaneId, blockSelectionMap]);
+
+  const handleWorkingDirectoryChange = useCallback(
+    (paneId: string, currentDirectory: string | null) => {
+      setPaneDirectoryMap((prev) => {
+        const nextValue = currentDirectory ?? null;
+        if ((prev.get(paneId) ?? null) === nextValue) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        if (nextValue) {
+          next.set(paneId, nextValue);
+        } else {
+          next.delete(paneId);
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const displayTabs = useMemo(
+    () => tabs.map((tab) => ({ ...tab, title: getTabDisplayTitle(tab, paneDirectoryMap) })),
+    [tabs, paneDirectoryMap]
+  );
+
+  const activeTabCurrentDirectory = useMemo(
+    () => getTabCurrentDirectory(activeTab, paneDirectoryMap),
+    [activeTab, paneDirectoryMap]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -160,13 +194,33 @@ function App() {
       }
       return newMap;
     });
+
+    setPaneDirectoryMap((prev) => {
+      const newMap = new Map(prev);
+      for (const paneId of newMap.keys()) {
+        if (!allPaneIds.has(paneId)) {
+          newMap.delete(paneId);
+        }
+      }
+      return newMap;
+    });
   }, [tabs]);
+
+  useEffect(() => {
+    const title = getWindowTitle(activeTabCurrentDirectory);
+    document.title = title;
+    void getCurrentWindow()
+      .setTitle(title)
+      .catch((error) => {
+        console.error("Failed to update window title", error);
+      });
+  }, [activeTabCurrentDirectory]);
 
   return (
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       <TabBar
-        tabs={tabs}
+        tabs={displayTabs}
         activeTabId={activeTabId}
         onSwitchTab={switchTab}
         onCreateTab={createTab}
@@ -180,6 +234,7 @@ function App() {
             focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
             onFocusPane={focusPane}
             onUpdateSplitRatio={updateSplitRatio}
+            onWorkingDirectoryChange={handleWorkingDirectoryChange}
             containerRef={containerRef}
           />
         </div>
