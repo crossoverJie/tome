@@ -54,8 +54,7 @@ export function SearchOverlay({
 
   if (!isOpen) return null;
 
-  const displayText =
-    resultCount > 0 ? `${currentIndex + 1}/${resultCount}` : "0/0";
+  const displayText = resultCount > 0 ? `${currentIndex + 1}/${resultCount}` : "0/0";
 
   return (
     <div className="search-overlay" onKeyDown={handleKeyDown}>
@@ -87,11 +86,7 @@ export function SearchOverlay({
         >
           ▼
         </button>
-        <button
-          className="search-close-btn"
-          onClick={onClose}
-          title="Close (Escape)"
-        >
+        <button className="search-close-btn" onClick={onClose} title="Close (Escape)">
           ✕
         </button>
       </div>

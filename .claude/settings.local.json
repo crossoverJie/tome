@@ -27,7 +27,15 @@
       "Bash(git checkout:*)",
       "Bash(cargo add:*)",
       "Bash(pnpm build:*)",
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "Bash(git pull:*)",
+      "Bash(cargo test:*)",
+      "Bash(pnpm test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(pnpm run:*)",
+      "Bash(pnpm:*)",
+      "Bash(pkill -f \"cargo run\")",
+      "Bash(pkill -f \"vite\")"
     ]
   }
 }

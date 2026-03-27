@@ -105,8 +105,7 @@ function highlightSearchResults(
       activeRange && range.start === activeRange.start && range.end === activeRange.end;
     const className = isActive ? "search-highlight-active" : "search-highlight";
     const matchAnsiStart = plainToAnsiMap[range.start];
-    const matchAnsiEnd =
-      range.end < totalPlainLength ? plainToAnsiMap[range.end] : ansiText.length;
+    const matchAnsiEnd = range.end < totalPlainLength ? plainToAnsiMap[range.end] : ansiText.length;
     const matchText = ansiText.slice(matchAnsiStart, matchAnsiEnd);
     result += `<span class="${className}">${converter.toHtml(matchText)}</span>`;
 
