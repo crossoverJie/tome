@@ -97,7 +97,18 @@
 - [ ] bash shell integration 支持
 - [ ] fish shell integration 支持
 
-### 2.6 通知
+### 2.6 窗口切换器
+
+- [ ] Rust 后端维护全局窗口注册表（窗口创建/销毁同步）
+- [ ] 暴露 `get_windows()` IPC 命令获取窗口列表
+- [ ] 广播 `windows-changed` 事件通知状态变化
+- [ ] 前端 `WindowSwitcher` 组件（MVP 卡片列表版）
+- [ ] `Cmd+`` 快捷键打开/关闭切换器
+- [ ] `Cmd+数字` 快捷键快速切换窗口
+- [ ] 窗口元数据上报（标题、目录、标签页数、活跃命令）
+- [ ] 【可选】缩略图生成与同步（完整版）
+
+### 2.7 Shell Integration 扩展
 - [ ] 长时间命令完成后发送 macOS 系统通知
 
 ---
