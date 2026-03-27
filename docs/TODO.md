@@ -90,7 +90,7 @@
 
 ### 2.4 补全与历史
 - [x] Tab 补全（首版支持 zsh 的基础命令 / 路径补全与简单候选菜单，Warp-style 结构化补全仍待后续增强）
-- [ ] Tab 补全忽略大小写（如 `cd Doc` 和 `cd doc` 都能提示 `Documents` 目录）
+- [x] Tab 补全忽略大小写（如 `cd Doc` 和 `cd doc` 都能提示 `Documents` 目录）
 - [x] 命令历史持久化与浏览（使用 Tauri FS API 保存到应用数据目录）
 
 ### 2.5 Shell Integration 扩展
