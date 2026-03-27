@@ -44,6 +44,7 @@ type TerminalEvent =
 interface UseTerminalSessionReturn {
   sessionId: string | null;
   blocks: Block[];
+  isInputReady: boolean;
   isAlternateScreen: boolean;
   rawOutput: string;
   currentDirectory: string | null;
@@ -68,6 +69,8 @@ interface UseTerminalSessionReturn {
   clearSearch: () => void;
 }
 
+const INITIAL_INPUT_READY_FALLBACK_MS = 150;
+
 export function useTerminalSession(
   paneId?: string,
   existingSessionId?: string
@@ -85,6 +88,7 @@ export function useTerminalSession(
   const persistedState = initialSessionId ? getSessionState(initialSessionId) : undefined;
 
   const [blocks, setBlocks] = useState<Block[]>(persistedState?.blocks || []);
+  const [isInputReady, setIsInputReady] = useState(false);
   const [isAlternateScreen, setIsAlternateScreen] = useState(
     persistedState?.isAlternateScreen || false
   );
@@ -99,6 +103,7 @@ export function useTerminalSession(
   const pendingCommandRef = useRef("");
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
   const isAlternateScreenRef = useRef(persistedState?.isAlternateScreen || false);
+  const inputReadyFallbackRef = useRef<number | null>(null);
 
   // Search state
   const [searchQuery, setSearchQueryState] = useState("");
@@ -126,6 +131,18 @@ export function useTerminalSession(
     hasInitialized.current = true;
 
     let unlisten: UnlistenFn | undefined;
+
+    const clearInputReadyFallback = () => {
+      if (inputReadyFallbackRef.current !== null) {
+        window.clearTimeout(inputReadyFallbackRef.current);
+        inputReadyFallbackRef.current = null;
+      }
+    };
+
+    const markInputReady = () => {
+      clearInputReadyFallback();
+      setIsInputReady(true);
+    };
 
     async function init() {
       try {
@@ -160,10 +177,10 @@ export function useTerminalSession(
           });
         }
 
-        const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
-        setCurrentDirectory(cwd);
+        setIsInputReady(false);
 
-        // Set up event listener for this session
+        // Set up the event listener before making follow-up IPC calls so we don't
+        // miss the shell's initial prompt/input markers during startup.
         unlisten = await listen<TerminalEvent>("terminal-event", (event) => {
           const payload = event.payload;
           if (payload.session_id !== sid) return;
@@ -198,13 +215,16 @@ export function useTerminalSession(
               switch (event_type) {
                 case "prompt_start":
                   phaseRef.current = "prompt";
+                  markInputReady();
                   break;
                 case "input_start":
                   phaseRef.current = "input";
                   currentCommandRef.current = "";
+                  markInputReady();
                   break;
                 case "command_start": {
                   phaseRef.current = "running";
+                  markInputReady();
                   const cmd = pendingCommandRef.current || currentCommandRef.current;
                   pendingCommandRef.current = "";
                   const id = `block-${++blockIdCounter.current}`;
@@ -269,7 +289,16 @@ export function useTerminalSession(
               break;
           }
         });
+
+        inputReadyFallbackRef.current = window.setTimeout(() => {
+          setIsInputReady(true);
+          inputReadyFallbackRef.current = null;
+        }, INITIAL_INPUT_READY_FALLBACK_MS);
+
+        const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
+        setCurrentDirectory(cwd);
       } catch (error) {
+        clearInputReadyFallback();
         hasInitialized.current = false;
         console.error("Failed to initialize terminal session", error);
       }
@@ -277,13 +306,14 @@ export function useTerminalSession(
 
     void init();
     return () => {
+      clearInputReadyFallback();
       unlisten?.();
     };
   }, [paneId]);
 
   const sendInput = useCallback(
     (data: string) => {
-      if (!sessionId) return;
+      if (!sessionId || !isInputReady) return;
       // Capture full command before sending to PTY (race-free)
       if (data.endsWith("\n")) {
         const cmd = data.slice(0, -1).trim();
@@ -296,12 +326,12 @@ export function useTerminalSession(
       }
       invoke("write_input", { sessionId, data });
     },
-    [sessionId]
+    [isInputReady, sessionId]
   );
 
   const requestCompletion = useCallback(
     async (text: string, cursor: number) => {
-      if (!sessionId) {
+      if (!sessionId || !isInputReady) {
         return {
           replaceFrom: cursor,
           replaceTo: cursor,
@@ -316,7 +346,7 @@ export function useTerminalSession(
         cursor,
       });
     },
-    [sessionId]
+    [isInputReady, sessionId]
   );
 
   const resizePty = useCallback(
@@ -441,6 +471,7 @@ export function useTerminalSession(
   return {
     sessionId,
     blocks,
+    isInputReady,
     isAlternateScreen,
     rawOutput,
     currentDirectory,

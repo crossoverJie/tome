@@ -53,9 +53,18 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 describe("useTerminalSession", () => {
+  async function flushAsyncWork() {
+    await act(async () => {
+      for (let i = 0; i < 5; i += 1) {
+        await Promise.resolve();
+      }
+    });
+  }
+
   beforeEach(() => {
     clearAllSessionState();
     terminalEventListener = undefined;
+    vi.useRealTimers();
     invokeMock.mockClear();
     listenMock.mockClear();
   });
@@ -70,6 +79,13 @@ describe("useTerminalSession", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("get_current_directory", { sessionId: "session-1" });
     expect(listenMock).toHaveBeenCalledWith("terminal-event", expect.any(Function));
+    const getCwdCallIndex = invokeMock.mock.calls.findIndex(
+      ([command]) => command === "get_current_directory"
+    );
+    expect(getCwdCallIndex).toBeGreaterThan(-1);
+    expect(listenMock.mock.invocationCallOrder[0]).toBeLessThan(
+      invokeMock.mock.invocationCallOrder[getCwdCallIndex]
+    );
 
     act(() => {
       terminalEventListener?.({
@@ -123,5 +139,46 @@ describe("useTerminalSession", () => {
     });
 
     expect(invokeMock).toHaveBeenNthCalledWith(1, "create_session");
+  });
+
+  it("keeps input guarded until startup settles, then unlocks via fallback", async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await flushAsyncWork();
+
+    expect(result.current.sessionId).toBe("session-1");
+    expect(result.current.isInputReady).toBe(false);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+
+    expect(result.current.isInputReady).toBe(true);
+  });
+
+  it("marks input ready immediately when the shell emits input_start", async () => {
+    vi.useFakeTimers();
+
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await flushAsyncWork();
+
+    expect(result.current.sessionId).toBe("session-1");
+    expect(result.current.isInputReady).toBe(false);
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    expect(result.current.isInputReady).toBe(true);
   });
 });

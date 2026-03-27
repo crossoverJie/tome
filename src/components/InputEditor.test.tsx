@@ -149,6 +149,78 @@ describe("InputEditor", () => {
       // Should have attempted to submit (even if empty)
       expect(onSubmitMock).toHaveBeenCalled();
     });
+
+    it("keeps the same editor instance across callback updates and uses the latest submit handler", async () => {
+      const firstSubmit = vi.fn();
+      const secondSubmit = vi.fn();
+      const secondRequestCompletion = vi.fn().mockResolvedValue({
+        replaceFrom: 0,
+        replaceTo: 0,
+        commonPrefix: null,
+        items: [],
+      });
+
+      const result = render(
+        <InputEditor
+          onSubmit={firstSubmit}
+          onRequestCompletion={requestCompletionMock}
+          disabled={false}
+        />
+      );
+
+      await waitFor(() => {
+        expect(result.container.querySelector(".cm-editor")).toBeTruthy();
+      });
+
+      const initialEditor = result.container.querySelector(".cm-editor");
+
+      result.rerender(
+        <InputEditor
+          onSubmit={secondSubmit}
+          onRequestCompletion={secondRequestCompletion}
+          disabled={false}
+        />
+      );
+
+      await waitFor(() => {
+        expect(result.container.querySelector(".cm-editor")).toBe(initialEditor);
+      });
+
+      const cmContent = result.container.querySelector(".cm-content") as HTMLElement;
+      cmContent.focus();
+      cmContent.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(firstSubmit).not.toHaveBeenCalled();
+      expect(secondSubmit).toHaveBeenCalled();
+    });
+
+    it("does not submit while disabled", async () => {
+      const { container } = await renderEditor({ disabled: true });
+      const cmContent = container.querySelector(".cm-content") as HTMLElement;
+      cmContent.focus();
+
+      cmContent.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(onSubmitMock).not.toHaveBeenCalled();
+    });
   });
 
   // Note: Testing CodeMirror's internal key handling is complex due to its
