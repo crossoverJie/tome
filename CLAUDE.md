@@ -68,3 +68,22 @@ One event emitted from backend to frontend:
 - **Rust errors**: `Result<T, String>` pattern for IPC command error propagation
 - **React**: Functional components with hooks, `memo()` for performance-sensitive components
 - **CI**: GitHub Actions runs three jobs on macOS — `test-rust`, `test-frontend`, `build-tauri`
+
+## Pre-Commit Checklist
+
+Before committing code changes, ensure all CI checks pass locally:
+
+```bash
+# Rust checks (run from src-tauri/)
+cd src-tauri/
+cargo fmt -- --check          # Format check
+cargo clippy -- -D warnings   # Lint
+cargo test                    # Tests
+
+# Frontend checks (run from project root)
+pnpm build                    # TypeScript check + Vite build
+pnpm test                     # Vitest tests
+pnpm format:check             # Prettier check
+```
+
+All checks must pass before pushing to remote. The CI will reject PRs that fail any of these checks.

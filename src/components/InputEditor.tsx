@@ -122,7 +122,12 @@ export function InputEditor({
   const handleSubmit = useCallback(
     (view: EditorView) => {
       if (completionStateRef.current.open) {
-        return applySelectedCompletion(view);
+        const handled = applySelectedCompletion(view);
+        if (handled) {
+          return true;
+        }
+        // If completion menu was already closed (race condition),
+        // continue with normal submit instead of returning false
       }
 
       const value = view.state.doc.toString();

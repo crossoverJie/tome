@@ -35,7 +35,8 @@
       "Bash(pnpm run:*)",
       "Bash(pnpm:*)",
       "Bash(pkill -f \"cargo run\")",
-      "Bash(pkill -f \"vite\")"
+      "Bash(pkill -f \"vite\")",
+      "Bash(cargo check:*)"
     ]
   }
 }
