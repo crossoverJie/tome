@@ -90,6 +90,7 @@
 - 使用 Web 编辑器组件（Monaco Editor 精简版 / CodeMirror / 自定义 contenteditable）
 - 回车时将输入内容通过 Tauri IPC 发送给 Rust 后端写入 PTY
 - 首版补全通过前端请求后端 completion API 实现：后端基于当前 shell 类型与会话 cwd 计算基础命令 / 路径候选，前端渲染简单候选菜单
+- **优化：Tab 补全应忽略大小写匹配（如 `cd Doc` 和 `cd doc` 都能提示 `Documents` 目录）**
 
 ### 2.3 全屏程序支持（P0）
 
@@ -144,6 +145,7 @@
 
 - 支持水平/垂直分屏
 - 每个分屏是一个独立的终端会话（独立 PTY）
+- **分屏时新 pane 应继承源 pane 的当前工作目录（而非默认进入用户 home 目录）**
 - 支持快捷键在分屏间切换焦点
 - 支持拖拽调整分屏比例
 

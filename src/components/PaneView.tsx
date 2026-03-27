@@ -10,13 +10,21 @@ interface PaneViewProps {
   sessionId?: string;
   isFocused: boolean;
   onFocus: () => void;
+  onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
 }
 
-export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProps) {
+export function PaneView({
+  paneId,
+  sessionId,
+  isFocused,
+  onFocus,
+  onWorkingDirectoryChange,
+}: PaneViewProps) {
   const {
     blocks,
     isAlternateScreen,
     rawOutput,
+    currentDirectory,
     sendInput,
     requestCompletion,
     resizePty,
@@ -43,6 +51,10 @@ export function PaneView({ paneId, sessionId, isFocused, onFocus }: PaneViewProp
     // Default size - actual resize happens via container ref
     resizePty(80, 24);
   }, [resizePty]);
+
+  useEffect(() => {
+    onWorkingDirectoryChange(paneId, currentDirectory);
+  }, [paneId, currentDirectory, onWorkingDirectoryChange]);
 
   const handleSubmit = useCallback(
     (command: string) => {

@@ -31,6 +31,11 @@ fn request_completion(
 }
 
 #[tauri::command]
+fn get_current_directory(session_id: String, state: State<AppState>) -> Result<String, String> {
+    state.pty_manager.get_current_directory(&session_id)
+}
+
+#[tauri::command]
 fn resize_pty(
     session_id: String,
     cols: u16,
@@ -52,6 +57,7 @@ pub fn run() {
             create_session,
             write_input,
             request_completion,
+            get_current_directory,
             resize_pty
         ])
         .run(tauri::generate_context!())

@@ -23,6 +23,8 @@ pub enum TerminalEvent {
     },
     #[serde(rename = "alternate_screen")]
     AlternateScreen { session_id: String, active: bool },
+    #[serde(rename = "current_directory")]
+    CurrentDirectory { session_id: String, path: String },
 }
 
 struct PtySession {
@@ -139,9 +141,12 @@ impl PtyManager {
                                 }
                                 ParsedEvent::CurrentDirectory(path) => {
                                     if let Ok(mut cwd) = current_dir_for_reader.lock() {
-                                        *cwd = PathBuf::from(path);
+                                        *cwd = PathBuf::from(&path);
                                     }
-                                    continue;
+                                    TerminalEvent::CurrentDirectory {
+                                        session_id: sid.clone(),
+                                        path,
+                                    }
                                 }
                             };
                             let _ = app.emit("terminal-event", te);
@@ -208,6 +213,18 @@ impl PtyManager {
         };
 
         crate::completion::request_completion(&shell, &current_dir, text, cursor)
+    }
+
+    pub fn get_current_directory(&self, session_id: &str) -> Result<String, String> {
+        let sessions = self.sessions.lock().unwrap();
+        let session = sessions.get(session_id).ok_or("Session not found")?;
+        let current_dir = session
+            .current_dir
+            .lock()
+            .map_err(|_| "Failed to access session cwd".to_string())?
+            .clone();
+
+        Ok(current_dir.to_string_lossy().to_string())
     }
 }
 

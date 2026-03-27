@@ -5,6 +5,7 @@ interface SessionState {
   blocks: Block[];
   isAlternateScreen: boolean;
   rawOutput: string;
+  currentDirectory: string | null;
 }
 
 // Global session state registry to persist session data across component remounts

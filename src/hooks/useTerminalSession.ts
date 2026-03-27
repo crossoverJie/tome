@@ -35,13 +35,15 @@ export interface SearchResult {
 type TerminalEvent =
   | { kind: "output"; session_id: string; data: string }
   | { kind: "block"; session_id: string; event_type: string; exit_code: number | null }
-  | { kind: "alternate_screen"; session_id: string; active: boolean };
+  | { kind: "alternate_screen"; session_id: string; active: boolean }
+  | { kind: "current_directory"; session_id: string; path: string };
 
 interface UseTerminalSessionReturn {
   sessionId: string | null;
   blocks: Block[];
   isAlternateScreen: boolean;
   rawOutput: string;
+  currentDirectory: string | null;
   sendInput: (data: string) => void;
   requestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   resizePty: (cols: number, rows: number) => void;
@@ -83,6 +85,9 @@ export function useTerminalSession(
     persistedState?.isAlternateScreen || false
   );
   const [rawOutput, setRawOutput] = useState(persistedState?.rawOutput || "");
+  const [currentDirectory, setCurrentDirectory] = useState<string | null>(
+    persistedState?.currentDirectory || null
+  );
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const phaseRef = useRef<Phase>("idle");
   const currentCommandRef = useRef("");
@@ -97,9 +102,9 @@ export function useTerminalSession(
   // Persist state whenever it changes
   useEffect(() => {
     if (sessionId) {
-      updateSessionState(sessionId, { blocks, isAlternateScreen, rawOutput });
+      updateSessionState(sessionId, { blocks, isAlternateScreen, rawOutput, currentDirectory });
     }
-  }, [sessionId, blocks, isAlternateScreen, rawOutput]);
+  }, [sessionId, blocks, isAlternateScreen, rawOutput, currentDirectory]);
 
   useEffect(() => {
     // Prevent double initialization
@@ -132,8 +137,12 @@ export function useTerminalSession(
           blocks: [],
           isAlternateScreen: false,
           rawOutput: "",
+          currentDirectory: null,
         });
       }
+
+      const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
+      setCurrentDirectory(cwd);
 
       hasInitialized.current = true;
 
@@ -215,6 +224,9 @@ export function useTerminalSession(
 
           case "alternate_screen":
             setIsAlternateScreen(payload.active);
+            break;
+          case "current_directory":
+            setCurrentDirectory(payload.path);
             break;
         }
       });
@@ -388,6 +400,7 @@ export function useTerminalSession(
     blocks,
     isAlternateScreen,
     rawOutput,
+    currentDirectory,
     sendInput,
     requestCompletion,
     resizePty,

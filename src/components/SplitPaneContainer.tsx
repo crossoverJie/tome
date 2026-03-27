@@ -9,6 +9,7 @@ interface SplitPaneContainerProps {
   focusedPaneId: string | null;
   onFocusPane: (paneId: string) => void;
   onUpdateSplitRatio: (paneId: string, ratio: number) => void;
+  onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   style?: React.CSSProperties;
 }
@@ -19,6 +20,7 @@ export function SplitPaneContainer({
   focusedPaneId,
   onFocusPane,
   onUpdateSplitRatio,
+  onWorkingDirectoryChange,
   containerRef,
   style,
 }: SplitPaneContainerProps) {
@@ -61,6 +63,7 @@ export function SplitPaneContainer({
           sessionId={pane.sessionId}
           isFocused={focusedPaneId === paneId}
           onFocus={() => onFocusPane(paneId)}
+          onWorkingDirectoryChange={onWorkingDirectoryChange}
         />
       </div>
     );
@@ -87,6 +90,7 @@ export function SplitPaneContainer({
         focusedPaneId={focusedPaneId}
         onFocusPane={onFocusPane}
         onUpdateSplitRatio={onUpdateSplitRatio}
+        onWorkingDirectoryChange={onWorkingDirectoryChange}
         containerRef={containerRef}
         style={{ flex: firstFlex }}
       />
@@ -97,6 +101,7 @@ export function SplitPaneContainer({
         focusedPaneId={focusedPaneId}
         onFocusPane={onFocusPane}
         onUpdateSplitRatio={onUpdateSplitRatio}
+        onWorkingDirectoryChange={onWorkingDirectoryChange}
         containerRef={containerRef}
         style={{ flex: secondFlex }}
       />
