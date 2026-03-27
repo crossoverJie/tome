@@ -55,11 +55,12 @@ export function FullscreenTerminal({
     };
   }, [onData, onResize]);
 
-  // Fit when visibility changes
+  // Fit and focus when visibility changes
   useEffect(() => {
     if (visible && fitAddonRef.current) {
       setTimeout(() => {
         fitAddonRef.current?.fit();
+        terminalRef.current?.focus();
       }, 50);
     }
   }, [visible]);

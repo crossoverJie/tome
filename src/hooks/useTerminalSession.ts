@@ -98,6 +98,7 @@ export function useTerminalSession(
   const currentCommandRef = useRef("");
   const pendingCommandRef = useRef("");
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
+  const isAlternateScreenRef = useRef(persistedState?.isAlternateScreen || false);
 
   // Search state
   const [searchQuery, setSearchQueryState] = useState("");
@@ -173,7 +174,8 @@ export function useTerminalSession(
               setRawOutput((prev) => prev + data);
 
               // Only append output to block when a command is running
-              if (phaseRef.current !== "running") return;
+              // Skip if alternate screen is active (vim, etc.) to avoid control sequences in output
+              if (phaseRef.current !== "running" || isAlternateScreenRef.current) return;
 
               setBlocks((prev) => {
                 const last = prev[prev.length - 1];
@@ -239,7 +241,25 @@ export function useTerminalSession(
             }
 
             case "alternate_screen":
+              isAlternateScreenRef.current = payload.active;
               setIsAlternateScreen(payload.active);
+              // When exiting alternate screen, clear the current block's output
+              // to avoid showing vim's control sequences
+              if (!payload.active && phaseRef.current === "running") {
+                setBlocks((prev) => {
+                  if (prev.length === 0) return prev;
+                  const last = prev[prev.length - 1];
+                  if (last && !last.isComplete) {
+                    const updated = [...prev];
+                    updated[updated.length - 1] = {
+                      ...last,
+                      output: "",
+                    };
+                    return updated;
+                  }
+                  return prev;
+                });
+              }
               break;
             case "current_directory":
               setCurrentDirectory(payload.path);
