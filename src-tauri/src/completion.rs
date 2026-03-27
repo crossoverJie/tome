@@ -120,6 +120,14 @@ fn is_completion_boundary(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, '|' | '&' | ';' | '(' | ')' | '<' | '>')
 }
 
+fn starts_with_ignore_case(haystack: &str, needle: &str) -> bool {
+    haystack
+        .chars()
+        .map(|c| c.to_ascii_lowercase())
+        .collect::<String>()
+        .starts_with(&needle.chars().map(|c| c.to_ascii_lowercase()).collect::<String>())
+}
+
 fn complete_commands(shell: &str, prefix: &str) -> Result<Vec<CompletionItem>, String> {
     let mut candidates = BTreeMap::new();
 
@@ -128,7 +136,7 @@ fn complete_commands(shell: &str, prefix: &str) -> Result<Vec<CompletionItem>, S
     }
 
     for word in zsh_words(shell) {
-        if word.starts_with(prefix) {
+        if starts_with_ignore_case(word, prefix) {
             candidates.entry(word.clone()).or_insert_with(|| "builtin".to_string());
         }
     }
@@ -160,7 +168,7 @@ fn path_commands(prefix: &str) -> Result<BTreeSet<String>, String> {
         for entry in entries.flatten() {
             let file_name = entry.file_name();
             let candidate = file_name.to_string_lossy();
-            if !candidate.starts_with(prefix) {
+            if !starts_with_ignore_case(&candidate, prefix) {
                 continue;
             }
 
@@ -245,7 +253,7 @@ fn complete_paths(current_dir: &Path, prefix: &str) -> Result<Vec<CompletionItem
     let mut items = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if !name.starts_with(&name_prefix) {
+        if !starts_with_ignore_case(&name, &name_prefix) {
             continue;
         }
 
@@ -306,23 +314,24 @@ where
     I: Iterator<Item = &'a str>,
 {
     let first = values.next()?.to_string();
-    let mut prefix = first;
+    let mut prefix_chars: Vec<char> = first.chars().collect();
 
     for value in values {
-        let mut next_prefix = String::new();
-        for (left, right) in prefix.chars().zip(value.chars()) {
-            if left != right {
+        let mut new_prefix = Vec::new();
+        for (left, right) in prefix_chars.iter().zip(value.chars()) {
+            if !left.eq_ignore_ascii_case(&right) {
                 break;
             }
-            next_prefix.push(left);
+            // Preserve the character case from the first value
+            new_prefix.push(*left);
         }
-        prefix = next_prefix;
-        if prefix.is_empty() {
+        prefix_chars = new_prefix;
+        if prefix_chars.is_empty() {
             break;
         }
     }
 
-    Some(prefix)
+    Some(prefix_chars.into_iter().collect())
 }
 
 #[cfg(test)]
@@ -417,5 +426,28 @@ mod tests {
     fn unique_test_dir() -> PathBuf {
         let suffix = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
         env::temp_dir().join(format!("tome-completion-test-{suffix}"))
+    }
+
+    #[test]
+    fn completes_paths_case_insensitive() {
+        let temp_root = unique_test_dir();
+        fs::create_dir_all(temp_root.join("Documents")).unwrap();
+
+        // "doc" should match "Documents"
+        let items = complete_paths(&temp_root, "doc").unwrap();
+        assert!(items.iter().any(|i| i.value == "Documents/"));
+
+        // "DOC" should also match "Documents"
+        let items = complete_paths(&temp_root, "DOC").unwrap();
+        assert!(items.iter().any(|i| i.value == "Documents/"));
+
+        fs::remove_dir_all(temp_root).unwrap();
+    }
+
+    #[test]
+    fn computes_common_prefix_case_insensitive() {
+        // Different cases should still find common prefix
+        let prefix = compute_common_prefix(["Documents", "documents", "DOC"].into_iter());
+        assert_eq!(prefix.as_deref(), Some("Doc"));
     }
 }
