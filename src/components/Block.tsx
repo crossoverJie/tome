@@ -8,6 +8,23 @@ const ansiConverter = new AnsiToHtml({
   escapeXML: true,
 });
 
+// Filter out non-SGR CSI sequences that shouldn't be displayed
+// Matches sequences like: ?25h (show cursor), >4;m (mouse mode), etc.
+// Keeps SGR sequences: \x1b[...m (colors/styles)
+function filterControlSequences(text: string): string {
+  // CSI sequences pattern: \x1b\[ followed by parameters and a final byte
+  // We want to keep SGR sequences (ending in 'm')
+  // Remove other CSI sequences like ?25h, >4;m, etc.
+  return text.replace(/\x1b\[[^m]*[A-Za-z]/g, (match) => {
+    // Keep SGR sequences (ending with 'm')
+    if (match.endsWith("m") && !match.includes("?") && !match.includes(">")) {
+      return match;
+    }
+    // Remove other control sequences
+    return "";
+  });
+}
+
 interface BlockProps {
   command: string;
   output: string;
@@ -39,20 +56,22 @@ function highlightSearchResults(
   activeRange: { start: number; end: number } | null | undefined,
   converter: AnsiToHtml
 ): string {
-  if (!ranges.length) return converter.toHtml(ansiText);
+  // Filter out non-SGR control sequences first
+  const filteredText = filterControlSequences(ansiText);
+  if (!ranges.length) return converter.toHtml(filteredText);
 
   // Step 1: Build position mapping from plain text index to ANSI text index
   const plainToAnsiMap: number[] = [];
   let i = 0;
 
-  while (i < ansiText.length) {
-    if (ansiText[i] === "\x1b" && i + 1 < ansiText.length && ansiText[i + 1] === "[") {
+  while (i < filteredText.length) {
+    if (filteredText[i] === "\x1b" && i + 1 < filteredText.length && filteredText[i + 1] === "[") {
       // ANSI sequence start - skip it
       i += 2; // Skip \x1b[
-      while (i < ansiText.length && !ansiText[i].match(/[mGK]/)) {
+      while (i < filteredText.length && !filteredText[i].match(/[mGK]/)) {
         i++;
       }
-      if (i < ansiText.length) {
+      if (i < filteredText.length) {
         i++; // Skip the terminating character
       }
     } else {
@@ -70,7 +89,7 @@ function highlightSearchResults(
     .map((r) => ({ start: r.start, end: Math.min(r.end, totalPlainLength) }))
     .sort((a, b) => a.start - b.start);
 
-  if (sortedRanges.length === 0) return converter.toHtml(ansiText);
+  if (sortedRanges.length === 0) return converter.toHtml(filteredText);
 
   // Step 3: Merge overlapping ranges
   const mergedRanges: Array<{ start: number; end: number }> = [];
@@ -97,7 +116,7 @@ function highlightSearchResults(
     if (range.start > lastPlainEnd) {
       const ansiStart = plainToAnsiMap[lastPlainEnd];
       const ansiEnd = plainToAnsiMap[range.start];
-      result += converter.toHtml(ansiText.slice(ansiStart, ansiEnd));
+      result += converter.toHtml(filteredText.slice(ansiStart, ansiEnd));
     }
 
     // Add highlighted match
@@ -105,8 +124,9 @@ function highlightSearchResults(
       activeRange && range.start === activeRange.start && range.end === activeRange.end;
     const className = isActive ? "search-highlight-active" : "search-highlight";
     const matchAnsiStart = plainToAnsiMap[range.start];
-    const matchAnsiEnd = range.end < totalPlainLength ? plainToAnsiMap[range.end] : ansiText.length;
-    const matchText = ansiText.slice(matchAnsiStart, matchAnsiEnd);
+    const matchAnsiEnd =
+      range.end < totalPlainLength ? plainToAnsiMap[range.end] : filteredText.length;
+    const matchText = filteredText.slice(matchAnsiStart, matchAnsiEnd);
     result += `<span class="${className}">${converter.toHtml(matchText)}</span>`;
 
     lastPlainEnd = range.end;
@@ -115,7 +135,7 @@ function highlightSearchResults(
   // Add remaining text after last match
   if (lastPlainEnd < totalPlainLength) {
     const ansiLastEnd = plainToAnsiMap[lastPlainEnd];
-    result += converter.toHtml(ansiText.slice(ansiLastEnd));
+    result += converter.toHtml(filteredText.slice(ansiLastEnd));
   }
 
   return result;
@@ -139,6 +159,8 @@ export const Block = memo(function Block({
 
   useEffect(() => {
     if (outputRef.current) {
+      // Filter out non-SGR control sequences before converting to HTML
+      const filteredOutput = filterControlSequences(output);
       // Apply search highlighting on original text before HTML conversion
       if (searchRanges && searchRanges.length > 0) {
         outputRef.current.innerHTML = highlightSearchResults(
@@ -148,7 +170,7 @@ export const Block = memo(function Block({
           ansiConverter
         );
       } else {
-        outputRef.current.innerHTML = ansiConverter.toHtml(output);
+        outputRef.current.innerHTML = ansiConverter.toHtml(filteredOutput);
       }
     }
   }, [output, searchRanges, activeSearchRange]);
