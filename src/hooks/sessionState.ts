@@ -8,9 +8,14 @@ interface SessionState {
   currentDirectory: string | null;
 }
 
+export interface PaneSessionInitOptions {
+  initialCwd?: string;
+}
+
 // Global session state registry to persist session data across component remounts
 const sessionStateRegistry = new Map<string, SessionState>();
 const paneToSessionMap = new Map<string, string>();
+const paneSessionInitOptionsRegistry = new Map<string, PaneSessionInitOptions>();
 
 export function getSessionState(sessionId: string): SessionState | undefined {
   return sessionStateRegistry.get(sessionId);
@@ -39,6 +44,24 @@ export function removePaneMapping(paneId: string): void {
   paneToSessionMap.delete(paneId);
 }
 
+export function setPaneSessionInitOptions(paneId: string, options: PaneSessionInitOptions): void {
+  paneSessionInitOptionsRegistry.set(paneId, options);
+}
+
+export function getPaneSessionInitOptions(paneId: string): PaneSessionInitOptions | undefined {
+  return paneSessionInitOptionsRegistry.get(paneId);
+}
+
+export function consumePaneSessionInitOptions(paneId: string): PaneSessionInitOptions | undefined {
+  const options = paneSessionInitOptionsRegistry.get(paneId);
+  paneSessionInitOptionsRegistry.delete(paneId);
+  return options;
+}
+
+export function removePaneSessionInitOptions(paneId: string): void {
+  paneSessionInitOptionsRegistry.delete(paneId);
+}
+
 export function removeSessionState(sessionId: string): void {
   sessionStateRegistry.delete(sessionId);
 }
@@ -46,4 +69,5 @@ export function removeSessionState(sessionId: string): void {
 export function clearAllSessionState(): void {
   sessionStateRegistry.clear();
   paneToSessionMap.clear();
+  paneSessionInitOptionsRegistry.clear();
 }
