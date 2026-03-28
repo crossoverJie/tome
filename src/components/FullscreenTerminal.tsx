@@ -5,15 +5,19 @@ import "@xterm/xterm/css/xterm.css";
 
 interface FullscreenTerminalProps {
   visible: boolean;
+  startOffset: number;
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
+  onReady: (cols: number, rows: number) => void;
   rawOutput: string;
 }
 
 export function FullscreenTerminal({
   visible,
+  startOffset,
   onData,
   onResize,
+  onReady,
   rawOutput,
 }: FullscreenTerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,12 +62,17 @@ export function FullscreenTerminal({
   // Fit and focus when visibility changes
   useEffect(() => {
     if (visible && fitAddonRef.current) {
+      terminalRef.current?.reset();
+      lastWrittenRef.current = startOffset;
       setTimeout(() => {
         fitAddonRef.current?.fit();
+        if (terminalRef.current) {
+          onReady(terminalRef.current.cols, terminalRef.current.rows);
+        }
         terminalRef.current?.focus();
       }, 50);
     }
-  }, [visible]);
+  }, [onReady, startOffset, visible]);
 
   // Write raw output to xterm when in fullscreen mode
   useEffect(() => {

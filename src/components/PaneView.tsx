@@ -23,13 +23,15 @@ export function PaneView({
   const {
     blocks,
     isInputReady,
-    isAlternateScreen,
+    isFullscreenTerminalActive,
+    fullscreenOutputStart,
     rawOutput,
     currentDirectory,
     gitBranch,
     sendInput,
     requestCompletion,
     resizePty,
+    notifyFullscreenReady,
     selectedBlockIndex,
     selectBlock,
     toggleBlockCollapse,
@@ -154,7 +156,7 @@ export function PaneView({
         onPrev={prevSearchResult}
         onClose={closeSearch}
       />
-      {!isAlternateScreen && (
+      {!isFullscreenTerminalActive && (
         <>
           <BlockList
             blocks={blocks}
@@ -167,15 +169,17 @@ export function PaneView({
           <InputEditor
             onSubmit={handleSubmit}
             onRequestCompletion={requestCompletion}
-            disabled={!isFocused || isAlternateScreen || !isInputReady}
+            disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
             gitBranch={gitBranch}
           />
         </>
       )}
       <FullscreenTerminal
-        visible={isAlternateScreen}
+        visible={isFullscreenTerminalActive}
+        startOffset={fullscreenOutputStart}
         onData={sendInput}
         onResize={resizePty}
+        onReady={notifyFullscreenReady}
         rawOutput={rawOutput}
       />
     </div>

@@ -34,7 +34,46 @@ export interface SearchResult {
   text: string;
 }
 
+function tokenizeCommand(command: string): string[] {
+  const matches = command.match(/"(?:\\.|[^"])*"|'(?:\\.|[^'])*'|\S+/g) || [];
+  return matches.map((token) => token.replace(/^['"]|['"]$/g, ""));
+}
+
+function isEnvAssignment(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token);
+}
+
+function isClaudeCommand(command: string): boolean {
+  const tokens = tokenizeCommand(command.trim());
+  if (tokens.length === 0) {
+    return false;
+  }
+
+  let index = 0;
+
+  if (tokens[index] === "env") {
+    index += 1;
+    while (index < tokens.length && isEnvAssignment(tokens[index])) {
+      index += 1;
+    }
+  }
+
+  while (index < tokens.length && (tokens[index] === "command" || tokens[index] === "exec")) {
+    index += 1;
+  }
+
+  const executable = tokens[index];
+  if (!executable) {
+    return false;
+  }
+
+  const normalized = executable.endsWith("/") ? executable.slice(0, -1) : executable;
+  const basename = normalized.split("/").pop();
+  return basename === "claude";
+}
+
 type TerminalEvent =
+  | { kind: "raw_output"; session_id: string; data: string }
   | { kind: "output"; session_id: string; data: string }
   | { kind: "block"; session_id: string; event_type: string; exit_code: number | null }
   | { kind: "alternate_screen"; session_id: string; active: boolean }
@@ -46,12 +85,16 @@ interface UseTerminalSessionReturn {
   blocks: Block[];
   isInputReady: boolean;
   isAlternateScreen: boolean;
+  isInteractiveCommandActive: boolean;
+  isFullscreenTerminalActive: boolean;
+  fullscreenOutputStart: number;
   rawOutput: string;
   currentDirectory: string | null;
   gitBranch: string | null;
   sendInput: (data: string) => void;
   requestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   resizePty: (cols: number, rows: number) => void;
+  notifyFullscreenReady: (cols: number, rows: number) => void;
   clearBlocks: () => void;
   selectedBlockIndex: number | null;
   selectBlock: (index: number | null) => void;
@@ -92,6 +135,12 @@ export function useTerminalSession(
   const [isAlternateScreen, setIsAlternateScreen] = useState(
     persistedState?.isAlternateScreen || false
   );
+  const [isInteractiveCommandActive, setIsInteractiveCommandActive] = useState(
+    persistedState?.isInteractiveCommandActive || false
+  );
+  const [fullscreenOutputStart, setFullscreenOutputStart] = useState(
+    persistedState?.fullscreenOutputStart || 0
+  );
   const [rawOutput, setRawOutput] = useState(persistedState?.rawOutput || "");
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(
     persistedState?.currentDirectory || null
@@ -101,9 +150,13 @@ export function useTerminalSession(
   const phaseRef = useRef<Phase>("idle");
   const currentCommandRef = useRef("");
   const pendingCommandRef = useRef("");
+  const pendingClaudeLaunchRef = useRef<string | null>(null);
+  const interactiveCommandRef = useRef(persistedState?.isInteractiveCommandActive || false);
+  const rawOutputRef = useRef(persistedState?.rawOutput || "");
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
   const isAlternateScreenRef = useRef(persistedState?.isAlternateScreen || false);
   const inputReadyFallbackRef = useRef<number | null>(null);
+  const isFullscreenTerminalActive = isAlternateScreen || isInteractiveCommandActive;
 
   // Search state
   const [searchQuery, setSearchQueryState] = useState("");
@@ -116,12 +169,27 @@ export function useTerminalSession(
       updateSessionState(sessionId, {
         blocks,
         isAlternateScreen,
+        isInteractiveCommandActive,
+        fullscreenOutputStart,
         rawOutput,
         currentDirectory,
         gitBranch,
       });
     }
-  }, [sessionId, blocks, isAlternateScreen, rawOutput, currentDirectory, gitBranch]);
+  }, [
+    sessionId,
+    blocks,
+    isAlternateScreen,
+    isInteractiveCommandActive,
+    fullscreenOutputStart,
+    rawOutput,
+    currentDirectory,
+    gitBranch,
+  ]);
+
+  useEffect(() => {
+    rawOutputRef.current = rawOutput;
+  }, [rawOutput]);
 
   useEffect(() => {
     // Prevent double initialization
@@ -171,6 +239,8 @@ export function useTerminalSession(
             sessionId: sid,
             blocks: [],
             isAlternateScreen: false,
+            isInteractiveCommandActive: false,
+            fullscreenOutputStart: 0,
             rawOutput: "",
             currentDirectory: null,
             gitBranch: null,
@@ -186,13 +256,21 @@ export function useTerminalSession(
           if (payload.session_id !== sid) return;
 
           switch (payload.kind) {
+            case "raw_output":
+              setRawOutput((prev) => prev + payload.data);
+              break;
             case "output": {
               const data = payload.data;
-              setRawOutput((prev) => prev + data);
 
-              // Only append output to block when a command is running
-              // Skip if alternate screen is active (vim, etc.) to avoid control sequences in output
-              if (phaseRef.current !== "running" || isAlternateScreenRef.current) return;
+              // Only append output to block when a simple shell command is running.
+              // Terminal-controlled UIs such as claude should render through xterm only.
+              if (
+                phaseRef.current !== "running" ||
+                isAlternateScreenRef.current ||
+                interactiveCommandRef.current
+              ) {
+                return;
+              }
 
               setBlocks((prev) => {
                 const last = prev[prev.length - 1];
@@ -226,6 +304,15 @@ export function useTerminalSession(
                   phaseRef.current = "running";
                   markInputReady();
                   const cmd = pendingCommandRef.current || currentCommandRef.current;
+                  const interactiveCommandActive = isClaudeCommand(cmd);
+                  if (interactiveCommandRef.current !== interactiveCommandActive) {
+                    interactiveCommandRef.current = interactiveCommandActive;
+                    setIsInteractiveCommandActive(interactiveCommandActive);
+                  }
+                  if (interactiveCommandActive) {
+                    setFullscreenOutputStart(rawOutputRef.current.length);
+                  }
+                  pendingClaudeLaunchRef.current = null;
                   pendingCommandRef.current = "";
                   const id = `block-${++blockIdCounter.current}`;
                   setBlocks((prev) => [
@@ -245,6 +332,10 @@ export function useTerminalSession(
                 }
                 case "command_end":
                   phaseRef.current = "idle";
+                  interactiveCommandRef.current = false;
+                  pendingClaudeLaunchRef.current = null;
+                  setIsInteractiveCommandActive(false);
+                  setFullscreenOutputStart(rawOutputRef.current.length);
                   setBlocks((prev) => {
                     if (prev.length === 0) return prev;
                     const updated = [...prev];
@@ -261,6 +352,9 @@ export function useTerminalSession(
             }
 
             case "alternate_screen":
+              if (payload.active) {
+                setFullscreenOutputStart(rawOutputRef.current.length);
+              }
               isAlternateScreenRef.current = payload.active;
               setIsAlternateScreen(payload.active);
               // When exiting alternate screen, clear the current block's output
@@ -319,6 +413,13 @@ export function useTerminalSession(
         const cmd = data.slice(0, -1).trim();
         if (cmd) {
           pendingCommandRef.current = cmd;
+          if (isClaudeCommand(cmd)) {
+            interactiveCommandRef.current = true;
+            setIsInteractiveCommandActive(true);
+            setFullscreenOutputStart(rawOutputRef.current.length);
+            pendingClaudeLaunchRef.current = data;
+            return;
+          }
         }
       }
       if (phaseRef.current === "input") {
@@ -327,6 +428,21 @@ export function useTerminalSession(
       invoke("write_input", { sessionId, data });
     },
     [isInputReady, sessionId]
+  );
+
+  const notifyFullscreenReady = useCallback(
+    (cols: number, rows: number) => {
+      if (!sessionId) return;
+
+      const pendingLaunch = pendingClaudeLaunchRef.current;
+      if (!pendingLaunch) return;
+
+      pendingClaudeLaunchRef.current = null;
+      void invoke("resize_pty", { sessionId, cols, rows }).then(() =>
+        invoke("write_input", { sessionId, data: pendingLaunch })
+      );
+    },
+    [sessionId]
   );
 
   const requestCompletion = useCallback(
@@ -473,12 +589,16 @@ export function useTerminalSession(
     blocks,
     isInputReady,
     isAlternateScreen,
+    isInteractiveCommandActive,
+    isFullscreenTerminalActive,
+    fullscreenOutputStart,
     rawOutput,
     currentDirectory,
     gitBranch,
     sendInput,
     requestCompletion,
     resizePty,
+    notifyFullscreenReady,
     clearBlocks,
     selectedBlockIndex,
     selectBlock,

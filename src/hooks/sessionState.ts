@@ -4,6 +4,8 @@ interface SessionState {
   sessionId: string;
   blocks: Block[];
   isAlternateScreen: boolean;
+  isInteractiveCommandActive: boolean;
+  fullscreenOutputStart: number;
   rawOutput: string;
   currentDirectory: string | null;
   gitBranch: string | null;
