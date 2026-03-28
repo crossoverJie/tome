@@ -11,6 +11,7 @@
 | Rust 后端 — 终端解析（VTE + OSC 133） | ✅ 已完成 |
 | 前端 — Block 视图 | ✅ 已完成 |
 | 前端 — 输入编辑器（CodeMirror 6） | ✅ 已完成 |
+| 前端 — 命令语法高亮 | 🔶 待实现 |
 | 前端 — 全屏程序模式（xterm.js） | ✅ 已完成 |
 | Shell Integration — zsh | ✅ 已完成 |
 | 基本快捷键（Cmd+K 清屏等） | ✅ 已完成 |
@@ -87,6 +88,14 @@
 - 支持 Tab 补全（首版支持 zsh 的基础命令 / 路径补全，复杂 shell-native / Warp-style 菜单可后续增强）
 - 输入区域固定在窗口底部
 - **显示当前 Git 分支**（如 `$ (main)`），在 Git 仓库中自动检测并显示分支名
+- **命令语法高亮**：输入的命令文本根据 shell 语法进行着色（命令、参数、路径、字符串、变量等区分颜色）
+  - 命令名（command）：高亮显示内建命令、外部命令、别名
+  - 参数（flags/options）：`-` 或 `--` 开头的选项使用独立颜色
+  - 路径（paths）：文件/目录路径使用特定颜色，不存在的路径显示为红色/警告色
+  - 字符串（strings）：单引号/双引号字符串使用字符串颜色
+  - 变量（variables）：`$VAR` 或 `${VAR}` 形式的变量使用变量颜色
+  - 管道与重定向符（|, >, <, >>）：使用操作符颜色
+  - 错误检测：当输入的命令不存在于 PATH 中时，命令名显示为红色/警告色
 
 **技术实现：**
 
@@ -95,6 +104,11 @@
 - 首版补全通过前端请求后端 completion API 实现：后端基于当前 shell 类型与会话 cwd 计算基础命令 / 路径候选，前端渲染简单候选菜单
 - **优化：Tab 补全应忽略大小写匹配（如 `cd Doc` 和 `cd doc` 都能提示 `Documents` 目录）**
 - **Git 分支检测**：Rust 后端读取 `.git/HEAD` 文件解析当前分支，通过 `OSC 633` 序列发送给前端
+- **命令语法高亮实现方案**：
+  - 方案 A（Shell Integration 方案）：通过 zsh/bash 的 `zsh-syntax-highlighting` 或 `ble.sh` 等机制，让 shell 在 OSC 133 标记中附带 token 类型信息，前端根据 token 类型应用对应颜色
+  - 方案 B（前端自解析）：使用 CodeMirror 6 的语法分析能力，结合 shell 语法定义（类似 bash-language-server 的词法分析），在客户端解析命令并着色
+  - 方案 C（混合方案）：前端基于基础规则快速高亮（字符串、变量、管道符），复杂语义（命令是否存在、路径是否有效）通过异步 IPC 请求后端确认
+  - 推荐方案 C：首版使用 CodeMirror 6 的 stream parser 实现基础语法高亮，路径验证通过后端异步查询，命令存在性检测通过缓存的 PATH 列表匹配
 
 ### 2.3 全屏程序支持（P0）
 
@@ -180,6 +194,17 @@
 - 支持自定义配色方案（兼容 iTerm2 颜色方案格式）
 - 支持自定义字体和字号
 - 默认使用等宽编程字体（推荐 JetBrains Mono / Fira Code）
+- 命令语法高亮色定义：
+  - `syntax.command`：命令名（内建命令、外部命令、别名）
+  - `syntax.argument`：参数/选项（`-f`, `--flag`）
+  - `syntax.path`：文件/目录路径（存在的路径）
+  - `syntax.path.invalid`：无效路径（不存在的文件/目录）
+  - `syntax.string`：单引号/双引号字符串
+  - `syntax.variable`：环境变量（`$VAR`, `${VAR}`）
+  - `syntax.operator`：管道符、重定向符（`|`, `>`, `<`, `>>`）
+  - `syntax.error`：无效命令（PATH 中不存在的命令）
+  - `syntax.comment`：注释（以 `#` 开头的内容）
+  - `syntax.keyword`：shell 关键字（`if`, `for`, `while`, `function` 等）
 
 ### 3.4 快捷键（P1）
 
@@ -374,6 +399,7 @@ OSC 133 协议（FinalTerm 协议）标记：
 - [x] 前端：基本 Block 视图渲染
 - [x] 前端：输入编辑器（支持鼠标移动光标、基本编辑）
 - [x] 前端：xterm.js 全屏模式切换
+- [ ] 前端：输入编辑器命令语法高亮（命令/参数/路径/字符串/变量区分颜色）
 - [ ] Rust 后端：虚拟屏幕缓冲区（Screen Buffer）维护
 - [ ] 智能光标定位：鼠标点击通过方向键模拟移动 PTY 子进程光标
 - [x] Shell Integration：zsh 支持

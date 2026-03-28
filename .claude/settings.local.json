@@ -36,7 +36,9 @@
       "Bash(pnpm:*)",
       "Bash(pkill -f \"cargo run\")",
       "Bash(pkill -f \"vite\")",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch"
     ]
   }
 }

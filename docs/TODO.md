@@ -18,12 +18,14 @@
 - [x] PTY 输入写入（通过 Tauri IPC 接收前端输入）
 - [x] PTY 生命周期管理（关闭、重启）
 - [x] 环境变量与工作目录传递
+- [ ] PATH 目录缓存与命令存在性查询接口（用于输入编辑器语法高亮）
 
 ### 1.3 Rust 后端 — 终端解析
 - [x] VT 转义序列解析（基于 `vte` crate）
 - [x] Alternate screen buffer 检测（`\e[?1049h` / `\e[?1049l`）
 - [x] OSC 133 Shell Integration 标记解析（A/B/C/D 标记）
 - [x] 将解析结果通过 Tauri event 推送给前端
+- [ ] 路径存在性验证 IPC 接口（用于输入编辑器高亮）
 
 ### 1.4 前端 — Block 视图
 - [x] Block 数据模型定义（命令、输出、退出码、执行时间）
@@ -40,6 +42,13 @@
 - [x] 基本编辑快捷键（Cmd+A/C/V/X, Option+←/→）
 - [x] 回车提交命令（通过 IPC 写入 PTY）
 - [x] 命令历史浏览（↑/↓）
+- [ ] 命令语法高亮（commands/arguments/paths/strings/variables 区分颜色）
+  - [ ] CodeMirror 6 stream parser 实现基础 shell 语法高亮
+  - [ ] 定义 syntax highlighter 主题 tokens（command/argument/path/string/variable/operator）
+- [ ] 路径存在性验证（无效路径显示红色警告）
+- [ ] 命令存在性验证（无效命令显示红色警告）
+  - [ ] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
+  - [ ] 前端异步验证命令存在性
 
 ### 1.6 前端 — 全屏程序模式
 - [x] xterm.js 集成（隐藏状态）
@@ -121,6 +130,7 @@
 - [ ] 内置亮色主题
 - [ ] 跟随系统外观自动切换
 - [ ] 自定义配色方案（兼容 iTerm2 格式）
+- [ ] 命令语法高亮色变量定义（syntax-command/argument/path/string/variable/operator/error）
 
 ### 3.2 字体与排版
 - [x] 默认 JetBrains Mono / Fira Code
