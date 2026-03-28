@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   clearAllSessionState,
   consumePaneSessionInitOptions,
+  getSessionState,
   setPaneSessionInitOptions,
+  setSessionState,
+  updateSessionState,
 } from "./sessionState";
 
 describe("sessionState pane init options", () => {
@@ -14,5 +17,27 @@ describe("sessionState pane init options", () => {
       initialCwd: "/tmp/project",
     });
     expect(consumePaneSessionInitOptions("pane-1")).toBeUndefined();
+  });
+
+  it("persists interactive command state updates", () => {
+    clearAllSessionState();
+    setSessionState("session-1", {
+      sessionId: "session-1",
+      blocks: [],
+      isAlternateScreen: false,
+      isInteractiveCommandActive: false,
+      fullscreenOutputStart: 0,
+      rawOutput: "",
+      currentDirectory: null,
+      gitBranch: null,
+    });
+
+    updateSessionState("session-1", {
+      isInteractiveCommandActive: true,
+      fullscreenOutputStart: 42,
+    });
+
+    expect(getSessionState("session-1")?.isInteractiveCommandActive).toBe(true);
+    expect(getSessionState("session-1")?.fullscreenOutputStart).toBe(42);
   });
 });

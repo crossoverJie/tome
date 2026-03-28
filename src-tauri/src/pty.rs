@@ -15,6 +15,8 @@ use uuid::Uuid;
 pub enum TerminalEvent {
     #[serde(rename = "output")]
     Output { session_id: String, data: String },
+    #[serde(rename = "raw_output")]
+    RawOutput { session_id: String, data: String },
     #[serde(rename = "block")]
     Block {
         session_id: String,
@@ -123,12 +125,23 @@ impl PtyManager {
         std::thread::spawn(move || {
             let mut buf = [0u8; 4096];
             let mut parser = OutputParser::new();
+            let mut utf8_decoder = Utf8ChunkDecoder::new();
 
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let data = utf8_decoder.decode(&buf[..n]);
+                        if data.is_empty() {
+                            continue;
+                        }
+                        let _ = app.emit(
+                            "terminal-event",
+                            TerminalEvent::RawOutput {
+                                session_id: sid.clone(),
+                                data: data.clone(),
+                            },
+                        );
                         let events = parser.parse(&data);
 
                         for event in events {
@@ -327,6 +340,53 @@ fn get_git_branch(dir: &Path) -> Option<String> {
     }
 
     None
+}
+
+struct Utf8ChunkDecoder {
+    pending: Vec<u8>,
+}
+
+impl Utf8ChunkDecoder {
+    fn new() -> Self {
+        Self {
+            pending: Vec::new(),
+        }
+    }
+
+    fn decode(&mut self, chunk: &[u8]) -> String {
+        self.pending.extend_from_slice(chunk);
+        let mut output = String::new();
+
+        loop {
+            match std::str::from_utf8(&self.pending) {
+                Ok(valid) => {
+                    output.push_str(valid);
+                    self.pending.clear();
+                    break;
+                }
+                Err(error) => {
+                    let valid_up_to = error.valid_up_to();
+
+                    if valid_up_to > 0 {
+                        let valid = std::str::from_utf8(&self.pending[..valid_up_to]).unwrap();
+                        output.push_str(valid);
+                        self.pending.drain(..valid_up_to);
+                        continue;
+                    }
+
+                    match error.error_len() {
+                        Some(invalid_len) => {
+                            output.push_str(&String::from_utf8_lossy(&self.pending[..invalid_len]));
+                            self.pending.drain(..invalid_len);
+                        }
+                        None => break,
+                    }
+                }
+            }
+        }
+
+        output
+    }
 }
 
 // --- Output Parser ---
@@ -791,5 +851,23 @@ mod tests {
         let events2 = parser.parse("world");
         assert_eq!(events2.len(), 1);
         assert_eq!(events2[0], ParsedEvent::Output("world".to_string()));
+    }
+
+    #[test]
+    fn utf8_chunk_decoder_preserves_split_multibyte_sequences() {
+        let mut decoder = Utf8ChunkDecoder::new();
+        let first = decoder.decode(&[0xE2, 0x94]);
+        let second = decoder.decode(&[0x80, b' ', 0xE2, 0x94, 0x82]);
+
+        assert_eq!(first, "");
+        assert_eq!(second, "─ │");
+    }
+
+    #[test]
+    fn utf8_chunk_decoder_replaces_invalid_bytes_but_keeps_following_text() {
+        let mut decoder = Utf8ChunkDecoder::new();
+        let decoded = decoder.decode(&[0xFF, b'a', b'b', b'c']);
+
+        assert_eq!(decoded, "�abc");
     }
 }
