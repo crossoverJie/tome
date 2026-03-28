@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState, type MouseEvent } from "react";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
+import { shellLanguage } from "./shellLanguage";
+import { shellSyntaxHighlighting } from "./shellHighlight";
 import { useCommandHistory } from "../hooks/useCommandHistory";
 import type { CompletionItem, CompletionResponse } from "../types/completion";
 import {
@@ -357,6 +359,8 @@ export function InputEditor({
           },
         ]),
         placeholder("Type a command..."),
+        shellLanguage,
+        shellSyntaxHighlighting,
         EditorView.updateListener.of((update) => {
           if (!completionStateRef.current.open || applyingCompletionRef.current) {
             return;

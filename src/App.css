@@ -13,6 +13,17 @@
   --success: #4ec9b0;
   --error: #f44747;
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", monospace;
+
+  /* 语法高亮颜色 */
+  --syntax-command: #ff79c6; /* 命令 - 粉色 */
+  --syntax-argument: #8be9fd; /* 参数 - 青色 */
+  --syntax-path: #f1fa8c; /* 路径 - 黄色 */
+  --syntax-string: #50fa7b; /* 字符串 - 绿色 */
+  --syntax-variable: #bd93f9; /* 变量 - 紫色 */
+  --syntax-operator: #ff79c6; /* 操作符 - 粉色 */
+  --syntax-comment: #6272a4; /* 注释 - 蓝灰 */
+  --syntax-keyword: #ff79c6; /* 关键字 - 粉色 */
+  --syntax-number: #ffb86c; /* 数字 - 橙色 */
 }
 
 * {

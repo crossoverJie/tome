@@ -42,13 +42,13 @@
 - [x] 基本编辑快捷键（Cmd+A/C/V/X, Option+←/→）
 - [x] 回车提交命令（通过 IPC 写入 PTY）
 - [x] 命令历史浏览（↑/↓）
-- [ ] 命令语法高亮（commands/arguments/paths/strings/variables 区分颜色）
-  - [ ] CodeMirror 6 stream parser 实现基础 shell 语法高亮
-  - [ ] 定义 syntax highlighter 主题 tokens（command/argument/path/string/variable/operator）
-- [ ] 路径存在性验证（无效路径显示红色警告）
-- [ ] 命令存在性验证（无效命令显示红色警告）
-  - [ ] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
-  - [ ] 前端异步验证命令存在性
+- [x] 命令语法高亮（commands/arguments/paths/strings/variables 区分颜色）
+  - [x] CodeMirror 6 stream parser 实现基础 shell 语法高亮
+  - [x] 定义 syntax highlighter 主题 tokens（command/argument/path/string/variable/operator）
+  - [ ] 路径存在性验证（无效路径显示红色警告）
+  - [ ] 命令存在性验证（无效命令显示红色警告）
+    - [ ] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
+    - [ ] 前端异步验证命令存在性
 
 ### 1.6 前端 — 全屏程序模式
 - [x] xterm.js 集成（隐藏状态）
@@ -161,3 +161,43 @@
 - [ ] 启动时间 < 500ms
 - [ ] 输入延迟 < 16ms
 - [ ] 内存占用 < 100MB（单标签页）
+
+---
+
+## 验证方法
+
+### 命令语法高亮（1.5）
+
+启动应用后，在输入框输入以下命令测试高亮效果：
+
+| 输入 | 预期效果 |
+|------|----------|
+| `ls -la` | `ls` 粉色（命令），`-la` 青色（参数） |
+| `echo "hello world"` | `"hello world"` 绿色（字符串） |
+| `cd $HOME` | `$HOME` 紫色（变量） |
+| `cat file.txt \| grep pattern` | `cat`/`grep` 粉色（命令），`file.txt` 黄色（路径），`\|` 粉色（操作符） |
+| `# 这是注释` | 整行灰色（注释） |
+| `if true; then echo "ok"; fi` | `if`/`then`/`fi` 粉色（关键字） |
+| `./script.sh` | `./script.sh` 黄色（路径） |
+
+技术实现：
+- `src/components/shellLanguage.ts` - CodeMirror 6 StreamParser 语法解析
+- `src/components/shellHighlight.ts` - 语法高亮主题定义
+- `src/App.css` - CSS 变量定义颜色
+- 依赖：`@codemirror/language`, `@lezer/highlight`
+
+**注意**：当前为**基础高亮**，不验证命令/路径是否存在。`pw`、`pwd` 都会高亮为命令色，因为都位于命令位置。
+
+### CI 检查
+
+```bash
+# 前端检查
+pnpm build          # TypeScript 编译
+pnpm test           # 单元测试
+pnpm format:check   # 格式检查
+
+# Rust 检查（cd src-tauri/）
+cargo test
+cargo clippy -- -D warnings
+cargo fmt -- --check
+```
