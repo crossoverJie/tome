@@ -51,6 +51,16 @@ export function FullscreenTerminal({
       onResize(cols, rows);
     });
 
+    // Handle Cmd+Backspace (Cmd+Del on macOS) to delete to beginning of line
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.metaKey && event.key === "Backspace") {
+        // Send Ctrl+U (0x15) which deletes from cursor to beginning of line
+        onData("\x15");
+        return false;
+      }
+      return true;
+    });
+
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
