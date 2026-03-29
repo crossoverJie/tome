@@ -24,6 +24,7 @@
   --syntax-comment: #6272a4; /* 注释 - 蓝灰 */
   --syntax-keyword: #ff79c6; /* 关键字 - 粉色 */
   --syntax-number: #ffb86c; /* 数字 - 橙色 */
+  --syntax-error: #f44747; /* 错误/不存在 - 红色 */
 }
 
 * {
@@ -363,6 +364,14 @@ body {
 
 .input-editor-container .cm-activeLineGutter {
   background: transparent;
+}
+
+/* Shell validation error highlighting */
+.cm-error-token,
+.cm-error-token * {
+  color: var(--syntax-error) !important;
+  text-decoration: underline wavy var(--syntax-error);
+  text-underline-offset: 2px;
 }
 
 /* Fullscreen Terminal */

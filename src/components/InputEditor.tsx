@@ -3,6 +3,7 @@ import { EditorView, keymap, placeholder } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { shellLanguage } from "./shellLanguage";
 import { shellSyntaxHighlighting } from "./shellHighlight";
+import { shellValidation, type CheckCommandExists, type CheckPathExists } from "./shellValidation";
 import { useCommandHistory } from "../hooks/useCommandHistory";
 import type { CompletionItem, CompletionResponse } from "../types/completion";
 import {
@@ -14,8 +15,11 @@ import {
 interface InputEditorProps {
   onSubmit: (command: string) => void;
   onRequestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
+  onCheckCommandExists?: CheckCommandExists;
+  onCheckPathExists?: CheckPathExists;
   disabled?: boolean;
   gitBranch?: string | null;
+  currentDirectory?: string | null;
 }
 
 interface CompletionState {
@@ -37,8 +41,11 @@ const EMPTY_COMPLETION_STATE: CompletionState = {
 export function InputEditor({
   onSubmit,
   onRequestCompletion,
+  onCheckCommandExists,
+  onCheckPathExists,
   disabled,
   gitBranch,
+  currentDirectory,
 }: InputEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -52,6 +59,9 @@ export function InputEditor({
   const addCommandRef = useRef(addCommand);
   const onSubmitRef = useRef(onSubmit);
   const onRequestCompletionRef = useRef(onRequestCompletion);
+  const onCheckCommandExistsRef = useRef(onCheckCommandExists);
+  const onCheckPathExistsRef = useRef(onCheckPathExists);
+  const currentDirectoryRef = useRef(currentDirectory ?? null);
   const [completionState, setCompletionState] = useState<CompletionState>(EMPTY_COMPLETION_STATE);
   const completionStateRef = useRef(completionState);
 
@@ -78,6 +88,18 @@ export function InputEditor({
   useEffect(() => {
     onRequestCompletionRef.current = onRequestCompletion;
   }, [onRequestCompletion]);
+
+  useEffect(() => {
+    currentDirectoryRef.current = currentDirectory ?? null;
+  }, [currentDirectory]);
+
+  useEffect(() => {
+    onCheckCommandExistsRef.current = onCheckCommandExists;
+  }, [onCheckCommandExists]);
+
+  useEffect(() => {
+    onCheckPathExistsRef.current = onCheckPathExists;
+  }, [onCheckPathExists]);
 
   // Focus editor when enabled (pane becomes focused)
   useEffect(() => {
@@ -361,6 +383,11 @@ export function InputEditor({
         placeholder("Type a command..."),
         shellLanguage,
         shellSyntaxHighlighting,
+        ...shellValidation(
+          (cmd) => onCheckCommandExistsRef.current?.(cmd) ?? Promise.resolve(true),
+          (path, cwd) => onCheckPathExistsRef.current?.(path, cwd) ?? Promise.resolve(true),
+          () => currentDirectoryRef.current
+        ),
         EditorView.updateListener.of((update) => {
           if (!completionStateRef.current.open || applyingCompletionRef.current) {
             return;
