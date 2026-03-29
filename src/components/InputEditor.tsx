@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState, type MouseEvent } from "react";
 import { EditorView, keymap, placeholder } from "@codemirror/view";
+import { deleteToLineStart } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { shellLanguage } from "./shellLanguage";
 import { shellSyntaxHighlighting } from "./shellHighlight";
@@ -358,6 +359,10 @@ export function InputEditor({
           {
             key: "Shift-Enter",
             run: () => false, // Let default newline behavior happen
+          },
+          {
+            key: "Mod-Backspace",
+            run: deleteToLineStart,
           },
           {
             key: "ArrowUp",
