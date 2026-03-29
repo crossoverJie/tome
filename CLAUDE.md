@@ -68,6 +68,8 @@ One event emitted from backend to frontend:
 - **Rust errors**: `Result<T, String>` pattern for IPC command error propagation
 - **React**: Functional components with hooks, `memo()` for performance-sensitive components
 - **CI**: GitHub Actions runs three jobs on macOS — `test-rust`, `test-frontend`, `build-tauri`
+- **Comments**: All code comments must be in English
+- **Pull Requests**: All PR titles and descriptions must be in English
 
 ## Pre-Commit Checklist
 
