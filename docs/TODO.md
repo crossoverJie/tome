@@ -18,14 +18,14 @@
 - [x] PTY 输入写入（通过 Tauri IPC 接收前端输入）
 - [x] PTY 生命周期管理（关闭、重启）
 - [x] 环境变量与工作目录传递
-- [ ] PATH 目录缓存与命令存在性查询接口（用于输入编辑器语法高亮）
+- [x] PATH 目录缓存与命令存在性查询接口（用于输入编辑器语法高亮）
 
 ### 1.3 Rust 后端 — 终端解析
 - [x] VT 转义序列解析（基于 `vte` crate）
 - [x] Alternate screen buffer 检测（`\e[?1049h` / `\e[?1049l`）
 - [x] OSC 133 Shell Integration 标记解析（A/B/C/D 标记）
 - [x] 将解析结果通过 Tauri event 推送给前端
-- [ ] 路径存在性验证 IPC 接口（用于输入编辑器高亮）
+- [x] 路径存在性验证 IPC 接口（用于输入编辑器高亮）
 
 ### 1.4 前端 — Block 视图
 - [x] Block 数据模型定义（命令、输出、退出码、执行时间）
@@ -45,10 +45,10 @@
 - [x] 命令语法高亮（commands/arguments/paths/strings/variables 区分颜色）
   - [x] CodeMirror 6 stream parser 实现基础 shell 语法高亮
   - [x] 定义 syntax highlighter 主题 tokens（command/argument/path/string/variable/operator）
-  - [ ] 路径存在性验证（无效路径显示红色警告）
-  - [ ] 命令存在性验证（无效命令显示红色警告）
-    - [ ] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
-    - [ ] 前端异步验证命令存在性
+  - [x] 路径存在性验证（无效路径显示红色警告）
+  - [x] 命令存在性验证（无效命令显示红色警告）
+    - [x] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
+    - [x] 前端异步验证命令存在性
 
 ### 1.6 前端 — 全屏程序模式
 - [x] xterm.js 集成（隐藏状态）
@@ -183,10 +183,28 @@
 技术实现：
 - `src/components/shellLanguage.ts` - CodeMirror 6 StreamParser 语法解析
 - `src/components/shellHighlight.ts` - 语法高亮主题定义
+- `src/components/shellValidation.ts` - 异步命令/路径存在性验证扩展
+- `src/components/InputEditor.tsx` - 集成验证扩展与编辑器生命周期
+- `src/components/PaneView.tsx` - 注入 `check_command_exists` / `check_path_exists` IPC 调用
+- `src-tauri/src/completion.rs` - `check_command_exists` / `check_path_exists` 与 PATH 缓存
+- `src-tauri/src/lib.rs` - 暴露验证 IPC 命令
 - `src/App.css` - CSS 变量定义颜色
 - 依赖：`@codemirror/language`, `@lezer/highlight`
 
-**注意**：当前为**基础高亮**，不验证命令/路径是否存在。`pw`、`pwd` 都会高亮为命令色，因为都位于命令位置。
+### 命令/路径存在性验证（1.5）
+
+启动应用后，在输入框输入以下命令测试验证效果（约 300ms 延迟后生效）：
+
+| 输入 | 预期效果 |
+|------|----------|
+| `pw` | `pw` 红色带波浪下划线（命令不存在） |
+| `pwd` | `pwd` 粉色（命令存在，正常颜色） |
+| `ls ./nonexistent_dir` | `./nonexistent_dir` 红色（路径不存在） |
+| `cat ./src` | `./src` 黄色（路径存在，正常颜色） |
+| `ls ~/nonexistent_dir` | `~/nonexistent_dir` 红色（路径不存在） |
+| `echo "hello"` | `echo` 粉色，字符串绿色，无红色 |
+| `if true; then` | 关键字粉色，无红色（关键字不验证） |
+| `ls Documents` | 无红色（普通参数不验证） |
 
 ### CI 检查
 

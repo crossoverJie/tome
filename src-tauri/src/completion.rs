@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::env;
+#[cfg(unix)]
+use std::ffi::{CStr, CString};
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -36,6 +38,93 @@ struct CompletionContext {
 }
 
 static ZSH_WORDS: OnceLock<Vec<String>> = OnceLock::new();
+
+/// Cached set of all known command names (PATH executables + shell builtins).
+static COMMAND_SET: OnceLock<HashSet<String>> = OnceLock::new();
+
+fn get_command_set() -> &'static HashSet<String> {
+    COMMAND_SET.get_or_init(|| {
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let mut set = HashSet::new();
+
+        for word in zsh_words(&shell) {
+            set.insert(word.clone());
+        }
+
+        if let Some(path_var) = env::var_os("PATH") {
+            for dir in env::split_paths(&path_var) {
+                let entries = match fs::read_dir(&dir) {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                for entry in entries.flatten() {
+                    if let Ok(metadata) = entry.metadata() {
+                        if metadata.is_file() && is_executable(&metadata) {
+                            set.insert(entry.file_name().to_string_lossy().to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        set
+    })
+}
+
+/// Returns true if the given command name exists as a PATH executable or shell builtin.
+pub fn check_command_exists(command: &str) -> bool {
+    get_command_set().contains(command)
+}
+
+fn expand_tilde(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Ok(home) = env::var("HOME") {
+            return format!("{}/{}", home, rest);
+        }
+    } else if path == "~" {
+        if let Ok(home) = env::var("HOME") {
+            return home;
+        }
+    } else if let Some(rest) = path.strip_prefix('~') {
+        let (username, suffix) = match rest.split_once('/') {
+            Some((username, suffix)) => (username, Some(suffix)),
+            None => (rest, None),
+        };
+
+        #[cfg(unix)]
+        if let Some(home) = resolve_home_for_user(username) {
+            return match suffix {
+                Some(suffix) if !suffix.is_empty() => format!("{home}/{suffix}"),
+                _ => home,
+            };
+        }
+    }
+    path.to_string()
+}
+
+#[cfg(unix)]
+fn resolve_home_for_user(username: &str) -> Option<String> {
+    let username = CString::new(username).ok()?;
+    let passwd = unsafe { libc::getpwnam(username.as_ptr()) };
+    if passwd.is_null() {
+        return None;
+    }
+
+    let home_dir = unsafe { CStr::from_ptr((*passwd).pw_dir) };
+    Some(home_dir.to_string_lossy().into_owned())
+}
+
+/// Returns true if the given path exists on the filesystem.
+/// Relative paths are resolved against `cwd`; `~/…` paths expand the home directory.
+pub fn check_path_exists(path: &str, cwd: &str) -> bool {
+    let expanded = expand_tilde(path);
+    let p = Path::new(&expanded);
+    if p.is_absolute() {
+        p.exists()
+    } else {
+        Path::new(cwd).join(p).exists()
+    }
+}
 
 pub fn request_completion(
     shell: &str,
@@ -449,5 +538,76 @@ mod tests {
         // Different cases should still find common prefix
         let prefix = compute_common_prefix(["Documents", "documents", "DOC"].into_iter());
         assert_eq!(prefix.as_deref(), Some("Doc"));
+    }
+
+    // -----------------------------------------------------------------------
+    // check_path_exists
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn check_path_exists_absolute_existing() {
+        // /tmp is guaranteed to exist on macOS / Linux
+        assert!(check_path_exists("/tmp", "/"));
+    }
+
+    #[test]
+    fn check_path_exists_absolute_nonexistent() {
+        assert!(!check_path_exists("/nonexistent_tome_test_xyz", "/"));
+    }
+
+    #[test]
+    fn check_path_exists_relative_existing() {
+        let temp_root = unique_test_dir();
+        fs::create_dir_all(temp_root.join("subdir")).unwrap();
+        let cwd = temp_root.to_string_lossy().to_string();
+
+        assert!(check_path_exists("subdir", &cwd));
+
+        fs::remove_dir_all(&temp_root).unwrap();
+    }
+
+    #[test]
+    fn check_path_exists_relative_nonexistent() {
+        let temp_root = unique_test_dir();
+        fs::create_dir_all(&temp_root).unwrap();
+        let cwd = temp_root.to_string_lossy().to_string();
+
+        assert!(!check_path_exists("no_such_dir", &cwd));
+
+        fs::remove_dir_all(&temp_root).unwrap();
+    }
+
+    #[test]
+    fn check_path_exists_tilde_home() {
+        if env::var("HOME").is_err() {
+            return; // skip if HOME not set
+        }
+        // ~ itself must exist
+        assert!(check_path_exists("~", "/"));
+    }
+
+    #[test]
+    fn check_path_exists_tilde_username_home() {
+        let Ok(username) = env::var("USER") else {
+            return;
+        };
+
+        let path = format!("~{username}");
+        assert!(check_path_exists(&path, "/"));
+    }
+
+    // -----------------------------------------------------------------------
+    // check_command_exists
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn check_command_exists_bogus_returns_false() {
+        assert!(!check_command_exists("__nonexistent_cmd_tome_xyz__"));
+    }
+
+    #[test]
+    fn check_command_exists_builtin_pwd() {
+        // "pwd" is a zsh builtin and is also in PATH as /bin/pwd
+        assert!(check_command_exists("pwd"));
     }
 }

@@ -49,6 +49,16 @@ fn resize_pty(
     state.pty_manager.resize(&session_id, cols, rows)
 }
 
+#[tauri::command]
+fn check_command_exists(command: String) -> bool {
+    completion::check_command_exists(&command)
+}
+
+#[tauri::command]
+fn check_path_exists(path: String, cwd: String) -> bool {
+    completion::check_path_exists(&path, &cwd)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -62,7 +72,9 @@ pub fn run() {
             write_input,
             request_completion,
             get_current_directory,
-            resize_pty
+            resize_pty,
+            check_command_exists,
+            check_path_exists
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

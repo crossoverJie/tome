@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { BlockList } from "./BlockList";
 import { InputEditor } from "./InputEditor";
 import { FullscreenTerminal } from "./FullscreenTerminal";
@@ -169,8 +170,15 @@ export function PaneView({
           <InputEditor
             onSubmit={handleSubmit}
             onRequestCompletion={requestCompletion}
+            onCheckCommandExists={(cmd) =>
+              invoke<boolean>("check_command_exists", { command: cmd })
+            }
+            onCheckPathExists={(path) =>
+              invoke<boolean>("check_path_exists", { path, cwd: currentDirectory ?? "/" })
+            }
             disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
             gitBranch={gitBranch}
+            currentDirectory={currentDirectory}
           />
         </>
       )}
