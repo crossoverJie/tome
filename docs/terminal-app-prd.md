@@ -225,6 +225,7 @@
 | 快捷键 | 功能 |
 |--------|------|
 | `Cmd+Backspace` | 删除光标到行首（在 copilot、claude 等全屏应用中） |
+| `Shift+Enter` | 软换行（在 copilot、claude 等全屏应用中） |
 
 **窗口导航：**
 
