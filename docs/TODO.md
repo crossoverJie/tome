@@ -55,6 +55,7 @@
 - [x] 收到 alternate screen 事件时切换到 xterm.js 全屏视图
 - [x] 退出全屏程序后恢复 Block 视图
 - [x] 全屏模式下键盘输入直通 PTY
+- [x] **全屏模式快捷键：Cmd+Backspace (Cmd+Del) 删除到行首**
 
 ### 1.7 智能光标定位（CLI 工具输入行鼠标支持，仅输入场景）
 - [ ] Rust 后端维护虚拟屏幕缓冲区（Screen Buffer），实时追踪字符位置与光标坐标
