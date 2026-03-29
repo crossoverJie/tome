@@ -36,6 +36,7 @@ vi.mock("@xterm/xterm", () => ({
     loadAddon: terminalMocks.loadAddon,
     onData: terminalMocks.onData,
     onResize: terminalMocks.onResize,
+    attachCustomKeyEventHandler: vi.fn(),
   })),
 }));
 
