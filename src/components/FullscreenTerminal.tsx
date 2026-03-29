@@ -51,11 +51,21 @@ export function FullscreenTerminal({
       onResize(cols, rows);
     });
 
-    // Handle Cmd+Backspace (Cmd+Del on macOS) to delete to beginning of line
+    // Handle custom key events
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.metaKey && event.key === "Backspace") {
         // Send Ctrl+U (0x15) which deletes from cursor to beginning of line
         onData("\x15");
+        return false;
+      }
+      if (event.shiftKey && event.key === "Enter") {
+        // Only handle keydown, ignore keyup/keypress
+        if (event.type !== "keydown") {
+          return false;
+        }
+        // Send kitty keyboard protocol sequence for Shift+Enter
+        // This is recognized by modern CLI apps (Claude Code, Copilot, etc.) as soft newline
+        onData("\x1b[13;2u");
         return false;
       }
       return true;
