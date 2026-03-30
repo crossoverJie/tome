@@ -22,9 +22,11 @@ export function PaneView({
   onWorkingDirectoryChange,
 }: PaneViewProps) {
   const {
+    sessionId: activeSessionId,
     blocks,
     isInputReady,
     isFullscreenTerminalActive,
+    interactiveCommandKind,
     fullscreenOutputStart,
     rawOutput,
     currentDirectory,
@@ -183,12 +185,14 @@ export function PaneView({
         </>
       )}
       <FullscreenTerminal
+        sessionId={activeSessionId}
         visible={isFullscreenTerminalActive}
         startOffset={fullscreenOutputStart}
         onData={sendInput}
         onResize={resizePty}
         onReady={notifyFullscreenReady}
         rawOutput={rawOutput}
+        interactiveCommandKind={interactiveCommandKind}
       />
     </div>
   );

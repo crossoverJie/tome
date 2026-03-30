@@ -33,6 +33,7 @@ function buildHookState() {
     isInputReady: true,
     isAlternateScreen: false,
     isInteractiveCommandActive: false,
+    interactiveCommandKind: null,
     isFullscreenTerminalActive: false,
     fullscreenOutputStart: 0,
     rawOutput: "",

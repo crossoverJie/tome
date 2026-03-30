@@ -43,10 +43,12 @@ function isEnvAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token);
 }
 
-function isClaudeCommand(command: string): boolean {
+type InteractiveCommandKind = "claude" | "copilot";
+
+function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | null {
   const tokens = tokenizeCommand(command.trim());
   if (tokens.length === 0) {
-    return false;
+    return null;
   }
 
   let index = 0;
@@ -64,12 +66,24 @@ function isClaudeCommand(command: string): boolean {
 
   const executable = tokens[index];
   if (!executable) {
-    return false;
+    return null;
   }
 
   const normalized = executable.endsWith("/") ? executable.slice(0, -1) : executable;
   const basename = normalized.split("/").pop();
-  return basename === "claude";
+  if (!basename) {
+    return null;
+  }
+
+  if (basename === "claude") {
+    return "claude";
+  }
+
+  if (basename === "copilot" || basename === "gh-copilot" || basename === "github-copilot-cli") {
+    return "copilot";
+  }
+
+  return null;
 }
 
 type TerminalEvent =
@@ -86,6 +100,7 @@ interface UseTerminalSessionReturn {
   isInputReady: boolean;
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
+  interactiveCommandKind: InteractiveCommandKind | null;
   isFullscreenTerminalActive: boolean;
   fullscreenOutputStart: number;
   rawOutput: string;
@@ -138,6 +153,8 @@ export function useTerminalSession(
   const [isInteractiveCommandActive, setIsInteractiveCommandActive] = useState(
     persistedState?.isInteractiveCommandActive || false
   );
+  const [interactiveCommandKind, setInteractiveCommandKind] =
+    useState<InteractiveCommandKind | null>(persistedState?.interactiveCommandKind || null);
   const [fullscreenOutputStart, setFullscreenOutputStart] = useState(
     persistedState?.fullscreenOutputStart || 0
   );
@@ -170,6 +187,7 @@ export function useTerminalSession(
         blocks,
         isAlternateScreen,
         isInteractiveCommandActive,
+        interactiveCommandKind,
         fullscreenOutputStart,
         rawOutput,
         currentDirectory,
@@ -181,6 +199,7 @@ export function useTerminalSession(
     blocks,
     isAlternateScreen,
     isInteractiveCommandActive,
+    interactiveCommandKind,
     fullscreenOutputStart,
     rawOutput,
     currentDirectory,
@@ -240,6 +259,7 @@ export function useTerminalSession(
             blocks: [],
             isAlternateScreen: false,
             isInteractiveCommandActive: false,
+            interactiveCommandKind: null,
             fullscreenOutputStart: 0,
             rawOutput: "",
             currentDirectory: null,
@@ -304,11 +324,13 @@ export function useTerminalSession(
                   phaseRef.current = "running";
                   markInputReady();
                   const cmd = pendingCommandRef.current || currentCommandRef.current;
-                  const interactiveCommandActive = isClaudeCommand(cmd);
+                  const nextInteractiveCommandKind = getInteractiveAiCommandKind(cmd);
+                  const interactiveCommandActive = nextInteractiveCommandKind !== null;
                   if (interactiveCommandRef.current !== interactiveCommandActive) {
                     interactiveCommandRef.current = interactiveCommandActive;
                     setIsInteractiveCommandActive(interactiveCommandActive);
                   }
+                  setInteractiveCommandKind(nextInteractiveCommandKind);
                   if (interactiveCommandActive) {
                     setFullscreenOutputStart(rawOutputRef.current.length);
                   }
@@ -335,6 +357,7 @@ export function useTerminalSession(
                   interactiveCommandRef.current = false;
                   pendingClaudeLaunchRef.current = null;
                   setIsInteractiveCommandActive(false);
+                  setInteractiveCommandKind(null);
                   setFullscreenOutputStart(rawOutputRef.current.length);
                   setBlocks((prev) => {
                     if (prev.length === 0) return prev;
@@ -413,9 +436,10 @@ export function useTerminalSession(
         const cmd = data.slice(0, -1).trim();
         if (cmd) {
           pendingCommandRef.current = cmd;
-          if (isClaudeCommand(cmd)) {
+          if (getInteractiveAiCommandKind(cmd)) {
             interactiveCommandRef.current = true;
             setIsInteractiveCommandActive(true);
+            setInteractiveCommandKind(getInteractiveAiCommandKind(cmd));
             setFullscreenOutputStart(rawOutputRef.current.length);
             pendingClaudeLaunchRef.current = data;
             return;
@@ -590,6 +614,7 @@ export function useTerminalSession(
     isInputReady,
     isAlternateScreen,
     isInteractiveCommandActive,
+    interactiveCommandKind,
     isFullscreenTerminalActive,
     fullscreenOutputStart,
     rawOutput,

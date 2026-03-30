@@ -58,12 +58,12 @@
 - [x] **全屏模式快捷键：Cmd+Backspace (Cmd+Del) 删除到行首**
 
 ### 1.7 智能光标定位（CLI 工具输入行鼠标支持，仅输入场景）
-- [ ] Rust 后端维护虚拟屏幕缓冲区（Screen Buffer），实时追踪字符位置与光标坐标
-- [ ] 前端监听非编辑器区域的鼠标点击，将屏幕坐标通过 IPC 发送给后端
-- [ ] 后端对比目标位置与当前光标位置，计算行列偏移量
-- [ ] 向 PTY 发送对应数量的方向键转义序列（`\e[A/B/C/D`）模拟光标移动
-- [ ] 通过 `\e[6n`（Cursor Position Report）校准实际光标位置
-- [ ] 识别 prompt 前缀（不可编辑区域）防止光标越界
+- [x] Rust 后端维护虚拟屏幕缓冲区（Screen Buffer），实时追踪字符位置与光标坐标
+- [x] 前端监听非编辑器区域的鼠标点击，将屏幕坐标通过 IPC 发送给后端
+- [x] 后端对比目标位置与当前光标位置，计算行列偏移量
+- [x] 向 PTY 发送对应数量的方向键转义序列（`\e[A/B/C/D`）模拟光标移动
+- [x] 通过 `\e[6n`（Cursor Position Report）校准实际光标位置
+- [x] 识别 prompt 前缀（不可编辑区域）防止光标越界
 
 ### 1.8 Shell Integration
 - [x] zsh shell integration 脚本编写（precmd/preexec hook）

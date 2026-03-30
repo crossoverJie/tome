@@ -50,6 +50,38 @@ fn resize_pty(
 }
 
 #[tauri::command]
+fn move_cursor_to_position(
+    session_id: String,
+    row: u16,
+    col: u16,
+    staged: Option<bool>,
+    state: State<AppState>,
+) -> Result<(), String> {
+    state
+        .pty_manager
+        .move_cursor_to_position(&session_id, row, col, staged.unwrap_or(false))
+}
+
+#[tauri::command]
+fn report_cursor_position(
+    session_id: String,
+    row: u16,
+    col: u16,
+    set_anchor: bool,
+    state: State<AppState>,
+) -> Result<bool, String> {
+    state.pty_manager.report_cursor_position(&session_id, row, col, set_anchor)
+}
+
+#[tauri::command]
+fn clear_interactive_input_anchor(
+    session_id: String,
+    state: State<AppState>,
+) -> Result<(), String> {
+    state.pty_manager.clear_interactive_input_anchor(&session_id)
+}
+
+#[tauri::command]
 fn check_command_exists(command: String) -> bool {
     completion::check_command_exists(&command)
 }
@@ -73,6 +105,9 @@ pub fn run() {
             request_completion,
             get_current_directory,
             resize_pty,
+            move_cursor_to_position,
+            report_cursor_position,
+            clear_interactive_input_anchor,
             check_command_exists,
             check_path_exists
         ])

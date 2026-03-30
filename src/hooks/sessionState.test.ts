@@ -26,6 +26,7 @@ describe("sessionState pane init options", () => {
       blocks: [],
       isAlternateScreen: false,
       isInteractiveCommandActive: false,
+      interactiveCommandKind: null,
       fullscreenOutputStart: 0,
       rawOutput: "",
       currentDirectory: null,
@@ -34,10 +35,12 @@ describe("sessionState pane init options", () => {
 
     updateSessionState("session-1", {
       isInteractiveCommandActive: true,
+      interactiveCommandKind: "claude",
       fullscreenOutputStart: 42,
     });
 
     expect(getSessionState("session-1")?.isInteractiveCommandActive).toBe(true);
+    expect(getSessionState("session-1")?.interactiveCommandKind).toBe("claude");
     expect(getSessionState("session-1")?.fullscreenOutputStart).toBe(42);
   });
 });
