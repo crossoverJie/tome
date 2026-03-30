@@ -2,11 +2,32 @@
 
 A lightweight block-based terminal built with Tauri 2 + React + TypeScript.
 
-## Recommended IDE Setup
+## Features
+
+### Keyboard Shortcuts
+
+**Global**
+
+- `Cmd+K` — Clear all blocks
+- `Cmd+↑/↓` — Navigate between blocks
+- `Cmd+Shift+C` — Copy selected block output
+- Mouse click — Move cursor to position (in input editor)
+
+**Fullscreen Terminal (Claude, Copilot, etc.)**
+
+- `Cmd+Delete` — Clear current line
+- `Cmd+←` — Jump to beginning of line
+- `Cmd+→` — Jump to end of line
+- `Shift+Enter` — Insert soft newline
+- Mouse click — Move cursor to position
+
+## Development
+
+### Prerequisites
 
 - [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
 
-## Development
+### Commands
 
 ```bash
 # Install dependencies
