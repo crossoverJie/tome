@@ -392,6 +392,57 @@ body {
   display: block;
 }
 
+.fullscreen-terminal.visible .xterm-screen,
+.fullscreen-terminal.visible .xterm-screen canvas {
+  cursor: text;
+}
+
+.fullscreen-input-overlay {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 120;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(22, 33, 62, 0.92);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.fullscreen-input-overlay-header {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fullscreen-input-overlay-textarea {
+  width: 100%;
+  min-height: 44px;
+  max-height: 180px;
+  resize: none;
+  overflow: auto;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.fullscreen-input-overlay-textarea::placeholder {
+  color: var(--text-muted);
+}
+
 /* Settings Overlay */
 .settings-overlay {
   position: fixed;

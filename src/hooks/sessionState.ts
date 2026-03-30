@@ -5,6 +5,7 @@ interface SessionState {
   blocks: Block[];
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
+  interactiveCommandKind: "claude" | "copilot" | null;
   fullscreenOutputStart: number;
   rawOutput: string;
   currentDirectory: string | null;
