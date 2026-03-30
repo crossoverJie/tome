@@ -58,7 +58,9 @@ One event emitted from backend to frontend:
 
 ### Key Keyboard Shortcuts
 
-`Cmd+K` clear blocks, `Cmd+↑/↓` navigate blocks, `Cmd+Shift+C` copy selected output.
+**Block Navigation**: `Cmd+K` clear blocks, `Cmd+↑/↓` navigate blocks, `Cmd+Shift+C` copy selected output.
+
+**Fullscreen Terminal (AI tools)**: `Cmd+Delete` clear line, `Cmd+←/→` jump to line start/end, `Shift+Enter` soft newline.
 
 ## Conventions
 

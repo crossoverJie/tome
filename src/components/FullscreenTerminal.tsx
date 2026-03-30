@@ -588,6 +588,14 @@ export function FullscreenTerminal({
         onData("\x15");
         return false;
       }
+      if (event.metaKey && event.key === "ArrowLeft") {
+        onData("\x01");
+        return false;
+      }
+      if (event.metaKey && event.key === "ArrowRight") {
+        onData("\x05");
+        return false;
+      }
       if (event.shiftKey && event.key === "Enter") {
         if (event.type !== "keydown") {
           return false;
