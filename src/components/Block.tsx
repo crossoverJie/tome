@@ -1,5 +1,6 @@
 import { useRef, useEffect, memo } from "react";
 import AnsiToHtml from "ansi-to-html";
+import { processTerminalOutput } from "../utils/terminalOutput";
 
 const ansiConverter = new AnsiToHtml({
   fg: "#d4d4d4",
@@ -50,28 +51,28 @@ export function formatDuration(start: number, end: number | null): string {
 
 // Helper function to highlight search results in ANSI text
 // The search ranges are based on PLAIN TEXT (without ANSI sequences)
+// Note: ansiText should already be processed (filtered and \r handled) before calling this function
 function highlightSearchResults(
   ansiText: string,
   ranges: Array<{ start: number; end: number }>,
   activeRange: { start: number; end: number } | null | undefined,
   converter: AnsiToHtml
 ): string {
-  // Filter out non-SGR control sequences first
-  const filteredText = filterControlSequences(ansiText);
-  if (!ranges.length) return converter.toHtml(filteredText);
+  // ansiText is already filtered and processed by the caller
+  if (!ranges.length) return converter.toHtml(ansiText);
 
   // Step 1: Build position mapping from plain text index to ANSI text index
   const plainToAnsiMap: number[] = [];
   let i = 0;
 
-  while (i < filteredText.length) {
-    if (filteredText[i] === "\x1b" && i + 1 < filteredText.length && filteredText[i + 1] === "[") {
+  while (i < ansiText.length) {
+    if (ansiText[i] === "\x1b" && i + 1 < ansiText.length && ansiText[i + 1] === "[") {
       // ANSI sequence start - skip it
       i += 2; // Skip \x1b[
-      while (i < filteredText.length && !filteredText[i].match(/[mGK]/)) {
+      while (i < ansiText.length && !ansiText[i].match(/[mGK]/)) {
         i++;
       }
-      if (i < filteredText.length) {
+      if (i < ansiText.length) {
         i++; // Skip the terminating character
       }
     } else {
@@ -89,7 +90,7 @@ function highlightSearchResults(
     .map((r) => ({ start: r.start, end: Math.min(r.end, totalPlainLength) }))
     .sort((a, b) => a.start - b.start);
 
-  if (sortedRanges.length === 0) return converter.toHtml(filteredText);
+  if (sortedRanges.length === 0) return converter.toHtml(ansiText);
 
   // Step 3: Merge overlapping ranges
   const mergedRanges: Array<{ start: number; end: number }> = [];
@@ -116,7 +117,7 @@ function highlightSearchResults(
     if (range.start > lastPlainEnd) {
       const ansiStart = plainToAnsiMap[lastPlainEnd];
       const ansiEnd = plainToAnsiMap[range.start];
-      result += converter.toHtml(filteredText.slice(ansiStart, ansiEnd));
+      result += converter.toHtml(ansiText.slice(ansiStart, ansiEnd));
     }
 
     // Add highlighted match
@@ -124,9 +125,8 @@ function highlightSearchResults(
       activeRange && range.start === activeRange.start && range.end === activeRange.end;
     const className = isActive ? "search-highlight-active" : "search-highlight";
     const matchAnsiStart = plainToAnsiMap[range.start];
-    const matchAnsiEnd =
-      range.end < totalPlainLength ? plainToAnsiMap[range.end] : filteredText.length;
-    const matchText = filteredText.slice(matchAnsiStart, matchAnsiEnd);
+    const matchAnsiEnd = range.end < totalPlainLength ? plainToAnsiMap[range.end] : ansiText.length;
+    const matchText = ansiText.slice(matchAnsiStart, matchAnsiEnd);
     result += `<span class="${className}">${converter.toHtml(matchText)}</span>`;
 
     lastPlainEnd = range.end;
@@ -135,7 +135,7 @@ function highlightSearchResults(
   // Add remaining text after last match
   if (lastPlainEnd < totalPlainLength) {
     const ansiLastEnd = plainToAnsiMap[lastPlainEnd];
-    result += converter.toHtml(filteredText.slice(ansiLastEnd));
+    result += converter.toHtml(ansiText.slice(ansiLastEnd));
   }
 
   return result;
@@ -161,16 +161,18 @@ export const Block = memo(function Block({
     if (outputRef.current) {
       // Filter out non-SGR control sequences before converting to HTML
       const filteredOutput = filterControlSequences(output);
-      // Apply search highlighting on original text before HTML conversion
+      // Process carriage returns to handle progress bar overwrites
+      const processedOutput = processTerminalOutput(filteredOutput);
+      // Apply search highlighting on processed text before HTML conversion
       if (searchRanges && searchRanges.length > 0) {
         outputRef.current.innerHTML = highlightSearchResults(
-          output,
+          processedOutput,
           searchRanges,
           activeSearchRange,
           ansiConverter
         );
       } else {
-        outputRef.current.innerHTML = ansiConverter.toHtml(filteredOutput);
+        outputRef.current.innerHTML = ansiConverter.toHtml(processedOutput);
       }
     }
   }, [output, searchRanges, activeSearchRange]);
