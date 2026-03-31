@@ -5,6 +5,7 @@ import { InputEditor } from "./InputEditor";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
+import { logDiagnostics } from "../utils/diagnostics";
 import { getDirectoryLabel } from "../utils/workdir";
 
 interface PaneViewProps {
@@ -60,6 +61,28 @@ export function PaneView({
         : "Terminal";
   const fullscreenPaneTitle = getDirectoryLabel(currentDirectory);
 
+  const createPaneDiagnosticsSnapshot = useCallback(
+    (reason: string) => ({
+      reason,
+      paneId,
+      sessionId: activeSessionId,
+      isFocused,
+      isFullscreenTerminalActive,
+      interactiveCommandKind,
+      blockCount: blocks.length,
+      currentDirectory,
+    }),
+    [
+      activeSessionId,
+      blocks.length,
+      currentDirectory,
+      interactiveCommandKind,
+      isFocused,
+      isFullscreenTerminalActive,
+      paneId,
+    ]
+  );
+
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
   useEffect(() => {
@@ -70,6 +93,17 @@ export function PaneView({
   useEffect(() => {
     onWorkingDirectoryChange(paneId, currentDirectory);
   }, [paneId, currentDirectory, onWorkingDirectoryChange]);
+
+  useEffect(() => {
+    logDiagnostics("PaneView", "mount", createPaneDiagnosticsSnapshot("mount"));
+    return () => {
+      logDiagnostics("PaneView", "unmount", createPaneDiagnosticsSnapshot("unmount"));
+    };
+  }, [createPaneDiagnosticsSnapshot]);
+
+  useEffect(() => {
+    logDiagnostics("PaneView", "state-change", createPaneDiagnosticsSnapshot("state-change"));
+  }, [createPaneDiagnosticsSnapshot]);
 
   const handleSubmit = useCallback(
     (command: string) => {
