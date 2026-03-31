@@ -1,6 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { FullscreenTerminal } from "./FullscreenTerminal";
+import { FullscreenTerminal, resetFullscreenTerminalHostsForTest } from "./FullscreenTerminal";
 
 const terminalMocks = vi.hoisted(() => {
   const write = vi.fn();
@@ -12,6 +12,7 @@ const terminalMocks = vi.hoisted(() => {
   const onData = vi.fn();
   const onResize = vi.fn();
   const fit = vi.fn();
+  const refresh = vi.fn();
   const invoke = vi.fn();
   const attachCustomKeyEventHandler = vi.fn();
 
@@ -52,6 +53,7 @@ const terminalMocks = vi.hoisted(() => {
     },
     write,
     reset,
+    refresh,
     focus,
     open,
     dispose,
@@ -78,6 +80,7 @@ const terminalMocks = vi.hoisted(() => {
     onData,
     onResize,
     fit,
+    refresh,
     invoke,
     terminalInstance,
     emitData: (data: string) => dataHandler?.(data),
@@ -133,6 +136,7 @@ describe("FullscreenTerminal", () => {
     terminalMocks.dispose.mockReset();
     terminalMocks.loadAddon.mockReset();
     terminalMocks.fit.mockReset();
+    terminalMocks.refresh.mockReset();
     terminalMocks.invoke.mockReset();
     terminalMocks.attachCustomKeyEventHandler.mockReset();
     terminalMocks.terminalInstance.onData.mockClear();
@@ -153,6 +157,7 @@ describe("FullscreenTerminal", () => {
     resizeObserverMocks.observe.mockClear();
     resizeObserverMocks.disconnect.mockClear();
     vi.stubGlobal("ResizeObserver", resizeObserverMocks.MockResizeObserver);
+    resetFullscreenTerminalHostsForTest();
   });
 
   it("starts writing from the provided offset when fullscreen activates", () => {
@@ -344,6 +349,51 @@ describe("FullscreenTerminal", () => {
     });
   });
 
+  it("redraws when the document becomes visible again", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.fit.mockClear();
+    terminalMocks.refresh.mockClear();
+    terminalMocks.invoke.mockClear();
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    expect(terminalMocks.fit).toHaveBeenCalledOnce();
+    expect(terminalMocks.refresh).toHaveBeenCalledWith(0, 23);
+    expect(terminalMocks.invoke).toHaveBeenCalledWith("report_cursor_position", {
+      sessionId: "session-1",
+      row: 1,
+      col: 1,
+      setAnchor: true,
+    });
+  });
+
   it("moves focus and anchor when pane focus changes", () => {
     const onData = vi.fn();
     const onResize = vi.fn();
@@ -410,6 +460,57 @@ describe("FullscreenTerminal", () => {
     });
   });
 
+  it("reuses the same terminal host across a split-style remount", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    const firstRender = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={3}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"abcclaude ui"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(terminalMocks.reset).toHaveBeenCalledOnce();
+    expect(terminalMocks.write).toHaveBeenCalledWith("claude ui");
+
+    terminalMocks.reset.mockClear();
+    terminalMocks.write.mockClear();
+
+    firstRender.unmount();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={3}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"abcclaude ui"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(terminalMocks.reset).not.toHaveBeenCalled();
+    expect(terminalMocks.write).not.toHaveBeenCalled();
+  });
+
   it("translates a click into frontend cursor movement first", () => {
     terminalMocks.buffer.active.cursorX = 10;
     terminalMocks.buffer.active.cursorY = 4;
@@ -431,7 +532,11 @@ describe("FullscreenTerminal", () => {
       />
     );
 
-    const terminalElement = container.firstElementChild as HTMLDivElement;
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const terminalElement = container.querySelector(".fullscreen-terminal-host") as HTMLDivElement;
     vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
       width: 800,
       height: 480,
@@ -486,7 +591,11 @@ describe("FullscreenTerminal", () => {
       />
     );
 
-    const terminalElement = container.firstElementChild as HTMLDivElement;
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const terminalElement = container.querySelector(".fullscreen-terminal-host") as HTMLDivElement;
     vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
       width: 800,
       height: 480,
