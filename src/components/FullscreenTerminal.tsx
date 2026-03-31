@@ -346,6 +346,7 @@ function getTerminalClickCoords(
 interface FullscreenTerminalProps {
   sessionId: string | null;
   visible: boolean;
+  isFocused: boolean;
   startOffset: number;
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
@@ -357,6 +358,7 @@ interface FullscreenTerminalProps {
 export function FullscreenTerminal({
   sessionId,
   visible,
+  isFocused,
   startOffset,
   onData,
   onResize,
@@ -369,9 +371,24 @@ export function FullscreenTerminal({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lastWrittenRef = useRef(0);
+  const isHydratedRef = useRef(false);
+  const isFocusedRef = useRef(isFocused);
+  const rawOutputRef = useRef(rawOutput);
   const pendingProbeRef = useRef<{ setAnchor: boolean; buffer: string } | null>(null);
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const claudeRetryTimeoutRef = useRef<number | null>(null);
+  const activationFrameRef = useRef<number | null>(null);
+
+  const fitTerminal = useCallback(() => {
+    fitAddonRef.current?.fit();
+  }, []);
+
+  const clearActivationFrame = useCallback(() => {
+    if (activationFrameRef.current !== null) {
+      window.cancelAnimationFrame(activationFrameRef.current);
+      activationFrameRef.current = null;
+    }
+  }, []);
 
   const reportTerminalCursor = useCallback(
     async (setAnchor: boolean) => {
@@ -399,6 +416,18 @@ export function FullscreenTerminal({
       claudeRetryTimeoutRef.current = null;
     }
   }, []);
+
+  const focusTerminal = useCallback(
+    (setAnchor: boolean) => {
+      if (!visible || !terminalRef.current) {
+        return;
+      }
+
+      terminalRef.current.focus();
+      void reportTerminalCursor(setAnchor);
+    },
+    [reportTerminalCursor, visible]
+  );
 
   const scheduleClaudeCursorCorrection = useCallback(
     (retriesRemaining: number) => {
@@ -528,6 +557,14 @@ export function FullscreenTerminal({
   );
 
   useEffect(() => {
+    isFocusedRef.current = isFocused;
+  }, [isFocused]);
+
+  useEffect(() => {
+    rawOutputRef.current = rawOutput;
+  }, [rawOutput]);
+
+  useEffect(() => {
     if (!containerRef.current) return;
 
     const terminal = new Terminal({
@@ -614,12 +651,15 @@ export function FullscreenTerminal({
     return () => {
       clearClaudeRetryTimeout();
       pendingProbeRef.current = null;
+      clearActivationFrame();
       containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
       containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
       terminal.dispose();
     };
   }, [
+    clearActivationFrame,
     clearClaudeRetryTimeout,
+    fitTerminal,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
     onData,
@@ -630,25 +670,68 @@ export function FullscreenTerminal({
 
   useEffect(() => {
     if (visible && fitAddonRef.current) {
+      clearActivationFrame();
       clearClaudeRetryTimeout();
+      isHydratedRef.current = false;
       terminalRef.current?.reset();
       lastWrittenRef.current = startOffset;
-      setTimeout(() => {
-        fitAddonRef.current?.fit();
-        if (terminalRef.current) {
-          onReady(terminalRef.current.cols, terminalRef.current.rows);
+      const activateWhenSized = (attemptsRemaining: number) => {
+        const container = containerRef.current;
+        if (!container || !terminalRef.current) {
+          activationFrameRef.current = null;
+          return;
         }
-        terminalRef.current?.focus();
-        void reportTerminalCursor(true);
-      }, 50);
+
+        if ((container.clientWidth <= 0 || container.clientHeight <= 0) && attemptsRemaining > 0) {
+          activationFrameRef.current = window.requestAnimationFrame(() =>
+            activateWhenSized(attemptsRemaining - 1)
+          );
+          return;
+        }
+
+        activationFrameRef.current = null;
+        fitTerminal();
+        const initialData = rawOutputRef.current.slice(startOffset);
+        if (initialData.length > 0) {
+          terminalRef.current.write(initialData);
+        }
+        lastWrittenRef.current = rawOutputRef.current.length;
+        isHydratedRef.current = true;
+        onReady(terminalRef.current.cols, terminalRef.current.rows);
+        if (isFocusedRef.current) {
+          focusTerminal(true);
+        }
+      };
+
+      activationFrameRef.current = window.requestAnimationFrame(() => activateWhenSized(8));
+
+      return () => {
+        clearActivationFrame();
+      };
     } else if (sessionId) {
+      clearActivationFrame();
       clearClaudeRetryTimeout();
+      isHydratedRef.current = false;
       void invoke("clear_interactive_input_anchor", { sessionId });
     }
-  }, [clearClaudeRetryTimeout, onReady, reportTerminalCursor, sessionId, startOffset, visible]);
+  }, [
+    clearActivationFrame,
+    clearClaudeRetryTimeout,
+    fitTerminal,
+    onReady,
+    sessionId,
+    startOffset,
+    focusTerminal,
+    visible,
+  ]);
 
   useEffect(() => {
-    if (visible && terminalRef.current && rawOutput.length > lastWrittenRef.current) {
+    if (
+      visible &&
+      isHydratedRef.current &&
+      terminalRef.current &&
+      rawOutput.length > lastWrittenRef.current
+    ) {
       const newData = rawOutput.slice(lastWrittenRef.current);
       terminalRef.current.write(newData);
       lastWrittenRef.current = rawOutput.length;
@@ -658,12 +741,51 @@ export function FullscreenTerminal({
   useEffect(() => {
     const handleResize = () => {
       if (visible && fitAddonRef.current) {
-        fitAddonRef.current.fit();
+        fitTerminal();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [visible]);
+  }, [fitTerminal, visible]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (!visible) {
+        return;
+      }
+
+      fitTerminal();
+      void reportTerminalCursor(false);
+    });
+
+    observer.observe(container);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [fitTerminal, reportTerminalCursor, visible]);
+
+  useEffect(() => {
+    if (!sessionId || !visible) {
+      return;
+    }
+
+    if (!isFocused) {
+      void invoke("clear_interactive_input_anchor", { sessionId });
+      return;
+    }
+
+    if (!isHydratedRef.current) {
+      return;
+    }
+
+    focusTerminal(true);
+  }, [focusTerminal, isFocused, sessionId, visible]);
 
   return (
     <div className={`fullscreen-terminal ${visible ? "visible" : "hidden"}`} ref={containerRef} />
