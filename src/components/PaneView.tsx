@@ -5,6 +5,7 @@ import { InputEditor } from "./InputEditor";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
+import { getDirectoryLabel } from "../utils/workdir";
 
 interface PaneViewProps {
   paneId: string;
@@ -51,6 +52,13 @@ export function PaneView({
   // Search overlay visibility state (local to each pane)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
+  const fullscreenSessionLabel =
+    interactiveCommandKind === "claude"
+      ? "Claude"
+      : interactiveCommandKind === "copilot"
+        ? "Copilot"
+        : "Terminal";
+  const fullscreenPaneTitle = getDirectoryLabel(currentDirectory);
 
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
@@ -147,8 +155,17 @@ export function PaneView({
     [onFocus]
   );
 
+  const handleMouseDownCapture = useCallback(() => {
+    onFocus();
+  }, [onFocus]);
+
   return (
-    <div className={`pane-view ${isFocused ? "focused" : ""}`} onClick={handleClick} ref={paneRef}>
+    <div
+      className={`pane-view ${isFocused ? "focused" : ""}`}
+      onClick={handleClick}
+      onMouseDownCapture={handleMouseDownCapture}
+      ref={paneRef}
+    >
       <SearchOverlay
         query={searchQuery}
         resultCount={searchResults.length}
@@ -184,16 +201,32 @@ export function PaneView({
           />
         </>
       )}
-      <FullscreenTerminal
-        sessionId={activeSessionId}
-        visible={isFullscreenTerminalActive}
-        startOffset={fullscreenOutputStart}
-        onData={sendInput}
-        onResize={resizePty}
-        onReady={notifyFullscreenReady}
-        rawOutput={rawOutput}
-        interactiveCommandKind={interactiveCommandKind}
-      />
+      <div className={`pane-fullscreen-shell ${isFullscreenTerminalActive ? "visible" : "hidden"}`}>
+        {isFullscreenTerminalActive && (
+          <div className="pane-fullscreen-header" onClick={onFocus}>
+            <div className="pane-fullscreen-title-group">
+              <span className="pane-fullscreen-badge">{fullscreenSessionLabel}</span>
+              <span className="pane-fullscreen-title">{fullscreenPaneTitle}</span>
+            </div>
+            <span className="pane-fullscreen-focus-hint">
+              {isFocused ? "Focused" : "Click to focus"}
+            </span>
+          </div>
+        )}
+        <div className="pane-fullscreen-body">
+          <FullscreenTerminal
+            sessionId={activeSessionId}
+            visible={isFullscreenTerminalActive}
+            isFocused={isFocused}
+            startOffset={fullscreenOutputStart}
+            onData={sendInput}
+            onResize={resizePty}
+            onReady={notifyFullscreenReady}
+            rawOutput={rawOutput}
+            interactiveCommandKind={interactiveCommandKind}
+          />
+        </div>
+      </div>
     </div>
   );
 }

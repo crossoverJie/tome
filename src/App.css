@@ -381,7 +381,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 100;
+  z-index: 1;
 }
 
 .fullscreen-terminal.hidden {
@@ -559,11 +559,14 @@ body {
 
 /* Pane View */
 .pane-view {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
   border: 2px solid transparent;
   overflow: hidden;
+  min-width: 0;
+  min-height: 0;
   transition: border-color 0.15s;
 }
 
@@ -571,8 +574,73 @@ body {
   border-color: var(--accent);
 }
 
+.pane-fullscreen-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+}
+
+.pane-fullscreen-shell.hidden {
+  display: none;
+}
+
+.pane-fullscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  padding: 8px 12px;
+  background: rgba(22, 33, 62, 0.96);
+  border-bottom: 1px solid var(--border-color);
+  user-select: none;
+}
+
+.pane-fullscreen-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pane-fullscreen-badge {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pane-fullscreen-title {
+  color: var(--text-primary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-fullscreen-focus-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pane-view.focused .pane-fullscreen-focus-hint {
+  color: var(--accent);
+}
+
+.pane-fullscreen-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Tab Bar */
 .tab-bar {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   background: var(--bg-secondary);

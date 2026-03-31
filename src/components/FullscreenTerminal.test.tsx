@@ -85,6 +85,30 @@ const terminalMocks = vi.hoisted(() => {
   };
 });
 
+const resizeObserverMocks = vi.hoisted(() => {
+  let callback: ResizeObserverCallback | undefined;
+  const observe = vi.fn();
+  const disconnect = vi.fn();
+
+  class MockResizeObserver {
+    constructor(nextCallback: ResizeObserverCallback) {
+      callback = nextCallback;
+    }
+
+    observe = observe;
+    disconnect = disconnect;
+  }
+
+  return {
+    MockResizeObserver,
+    observe,
+    disconnect,
+    trigger(entries: ResizeObserverEntry[] = []) {
+      callback?.(entries, {} as ResizeObserver);
+    },
+  };
+});
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: terminalMocks.invoke,
 }));
@@ -126,6 +150,9 @@ describe("FullscreenTerminal", () => {
     terminalMocks.bufferService.buffer.hasScrollback = true;
     terminalMocks.bufferService.buffer.lines.get.mockClear();
     terminalMocks.bufferService.buffer.translateBufferLineToString.mockClear();
+    resizeObserverMocks.observe.mockClear();
+    resizeObserverMocks.disconnect.mockClear();
+    vi.stubGlobal("ResizeObserver", resizeObserverMocks.MockResizeObserver);
   });
 
   it("starts writing from the provided offset when fullscreen activates", () => {
@@ -137,6 +164,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={false}
+        isFocused={false}
         startOffset={0}
         onData={onData}
         onResize={onResize}
@@ -149,6 +177,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={6}
         onData={onData}
         onResize={onResize}
@@ -158,13 +187,14 @@ describe("FullscreenTerminal", () => {
     );
 
     expect(terminalMocks.reset).toHaveBeenCalledOnce();
-    expect(terminalMocks.write).toHaveBeenCalledWith("claude");
+    expect(terminalMocks.write).not.toHaveBeenCalled();
 
     act(() => {
       vi.runAllTimers();
     });
 
     expect(terminalMocks.fit).toHaveBeenCalled();
+    expect(terminalMocks.write).toHaveBeenCalledWith("claude");
     expect(terminalMocks.focus).toHaveBeenCalled();
     expect(terminalMocks.invoke).toHaveBeenCalledWith("report_cursor_position", {
       sessionId: "session-1",
@@ -183,6 +213,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={6}
         onData={onData}
         onResize={onResize}
@@ -191,12 +222,17 @@ describe("FullscreenTerminal", () => {
       />
     );
 
+    act(() => {
+      vi.runAllTimers();
+    });
+
     terminalMocks.write.mockClear();
 
     rerender(
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={6}
         onData={onData}
         onResize={onResize}
@@ -218,6 +254,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={0}
         onData={onData}
         onResize={onResize}
@@ -226,6 +263,10 @@ describe("FullscreenTerminal", () => {
       />
     );
 
+    act(() => {
+      vi.runAllTimers();
+    });
+
     terminalMocks.write.mockClear();
     terminalMocks.reset.mockClear();
 
@@ -233,6 +274,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={shellEcho.length}
         onData={onData}
         onResize={onResize}
@@ -244,10 +286,15 @@ describe("FullscreenTerminal", () => {
     expect(terminalMocks.reset).toHaveBeenCalledOnce();
     expect(terminalMocks.write).not.toHaveBeenCalled();
 
+    act(() => {
+      vi.runAllTimers();
+    });
+
     rerender(
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={shellEcho.length}
         onData={onData}
         onResize={onResize}
@@ -257,6 +304,110 @@ describe("FullscreenTerminal", () => {
     );
 
     expect(terminalMocks.write).toHaveBeenCalledWith("Claude UI");
+  });
+
+  it("refits when the fullscreen pane container resizes", async () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.fit.mockClear();
+    terminalMocks.invoke.mockClear();
+
+    await act(async () => {
+      resizeObserverMocks.trigger();
+    });
+
+    expect(terminalMocks.fit).toHaveBeenCalledOnce();
+    expect(terminalMocks.invoke).toHaveBeenCalledWith("report_cursor_position", {
+      sessionId: "session-1",
+      row: 1,
+      col: 1,
+      setAnchor: false,
+    });
+  });
+
+  it("moves focus and anchor when pane focus changes", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    const { rerender } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={false}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.focus.mockClear();
+    terminalMocks.invoke.mockClear();
+
+    rerender(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    expect(terminalMocks.focus).toHaveBeenCalledOnce();
+    expect(terminalMocks.invoke).toHaveBeenCalledWith("report_cursor_position", {
+      sessionId: "session-1",
+      row: 1,
+      col: 1,
+      setAnchor: true,
+    });
+
+    terminalMocks.invoke.mockClear();
+
+    rerender(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={false}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    expect(terminalMocks.invoke).toHaveBeenCalledWith("clear_interactive_input_anchor", {
+      sessionId: "session-1",
+    });
   });
 
   it("translates a click into frontend cursor movement first", () => {
@@ -271,6 +422,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={0}
         onData={onData}
         onResize={onResize}
@@ -324,6 +476,7 @@ describe("FullscreenTerminal", () => {
       <FullscreenTerminal
         sessionId={"session-1"}
         visible={true}
+        isFocused={true}
         startOffset={0}
         onData={onData}
         onResize={onResize}

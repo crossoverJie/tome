@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { PaneView } from "./PaneView";
 
 const useTerminalSessionMock = vi.fn();
@@ -86,6 +86,7 @@ describe("PaneView", () => {
       ...buildHookState(),
       isInteractiveCommandActive: true,
       isFullscreenTerminalActive: true,
+      interactiveCommandKind: "claude",
       fullscreenOutputStart: 12,
     });
 
@@ -100,6 +101,35 @@ describe("PaneView", () => {
 
     expect(screen.queryByText("BlockList")).toBeNull();
     expect(screen.queryByText("InputEditor")).toBeNull();
+    expect(screen.getByText("Claude")).toBeTruthy();
+    expect(screen.getByText("project")).toBeTruthy();
+    expect(screen.getByText("Focused")).toBeTruthy();
     expect(screen.getByText("Fullscreen visible 12")).toBeTruthy();
+  });
+
+  it("focuses the pane when clicking inside fullscreen terminal content", () => {
+    useTerminalSessionMock.mockReturnValue({
+      ...buildHookState(),
+      isInteractiveCommandActive: true,
+      isFullscreenTerminalActive: true,
+      interactiveCommandKind: "copilot",
+      fullscreenOutputStart: 8,
+    });
+
+    const onFocus = vi.fn();
+
+    render(
+      <PaneView
+        paneId="pane-1"
+        isFocused={false}
+        onFocus={onFocus}
+        onWorkingDirectoryChange={() => {}}
+      />
+    );
+
+    fireEvent.mouseDown(screen.getByText("Fullscreen visible 8"));
+
+    expect(onFocus).toHaveBeenCalled();
+    expect(screen.getByText("Click to focus")).toBeTruthy();
   });
 });
