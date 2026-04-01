@@ -384,9 +384,7 @@ export function FullscreenTerminal({
     compositionstartHandler: () => void;
     compositionendHandler: () => void;
     inputHandler: (e: Event) => void;
-    blurHandler: () => void;
   } | null>(null);
-  const pendingInputDataRef = useRef<string | null>(null);
   const recentXtermDataRef = useRef<string[]>([]);
 
   const fitTerminal = useCallback(() => {
@@ -693,21 +691,16 @@ export function FullscreenTerminal({
             }, 10);
           }
         };
-        const blurHandler = (): void => {
-          // Blur handler kept for potential future use
-        };
 
         textarea.addEventListener("compositionstart", compositionstartHandler);
         textarea.addEventListener("compositionend", compositionendHandler);
         textarea.addEventListener("input", inputHandler);
-        textarea.addEventListener("blur", blurHandler);
 
         textareaListenersRef.current = {
           textarea,
           compositionstartHandler,
           compositionendHandler,
           inputHandler,
-          blurHandler,
         };
       } else if (retriesRemaining > 0) {
         // Retry after a short delay
@@ -728,18 +721,16 @@ export function FullscreenTerminal({
 
       // Remove textarea event listeners
       if (textareaListenersRef.current) {
-        const { textarea, compositionstartHandler, compositionendHandler, inputHandler, blurHandler } =
+        const { textarea, compositionstartHandler, compositionendHandler, inputHandler } =
           textareaListenersRef.current;
         textarea.removeEventListener("compositionstart", compositionstartHandler);
         textarea.removeEventListener("compositionend", compositionendHandler);
         textarea.removeEventListener("input", inputHandler);
-        textarea.removeEventListener("blur", blurHandler);
         textareaListenersRef.current = null;
       }
 
       // Reset composing state
       isComposingRef.current = false;
-      pendingInputDataRef.current = null;
 
       containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
       containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
