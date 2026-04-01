@@ -564,6 +564,12 @@ impl VirtualScreen {
                 col = next;
                 steps += 1;
             }
+
+            // If we didn't reach the target, it might be due to wide chars not yet written
+            // Trust the reported position and calculate remaining steps as single-width
+            if col < to_col {
+                steps += to_col - col;
+            }
         }
 
         steps
@@ -1573,6 +1579,26 @@ mod tests {
         let follow_up = screen.report_cursor_position(0, 9, false).unwrap();
         assert_eq!(follow_up, "\x1b[D".repeat(2));
         assert_eq!(screen.cursor, ScreenPosition { row: 0, col: 7 });
+    }
+
+    #[test]
+    fn virtual_screen_handles_chinese_question_mark_input() {
+        let mut screen = VirtualScreen::new(4, 40);
+        screen.report_cursor_position(0, 0, true);
+
+        // Simulate typing "你好？" (Hello?)
+        screen.print('你');
+        screen.print('好');
+        screen.print('？');
+
+        // Chinese question mark should occupy 2 columns
+        assert_eq!(screen.cursor, ScreenPosition { row: 0, col: 6 });
+        assert_eq!(screen.cells[0][0], '你');
+        assert_eq!(screen.cells[0][1], WIDE_CONTINUATION);
+        assert_eq!(screen.cells[0][2], '好');
+        assert_eq!(screen.cells[0][3], WIDE_CONTINUATION);
+        assert_eq!(screen.cells[0][4], '？');
+        assert_eq!(screen.cells[0][5], WIDE_CONTINUATION);
     }
 
     #[test]
