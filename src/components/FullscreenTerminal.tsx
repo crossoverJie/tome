@@ -2,7 +2,6 @@ import { useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { getRootDiagnosticsSnapshot, logDiagnostics } from "../utils/diagnostics";
 import "@xterm/xterm/css/xterm.css";
 
 interface XtermCoreLike {
@@ -356,139 +355,6 @@ interface FullscreenTerminalProps {
   interactiveCommandKind?: "claude" | "copilot" | null;
 }
 
-interface TerminalHost {
-  hostId: number;
-  element: HTMLDivElement;
-  terminal: Terminal;
-  fitAddon: FitAddon;
-  disposeTimer: number | null;
-  hydrated: boolean;
-  lastWritten: number;
-  startOffset: number;
-  handleData: (data: string) => void;
-  handleResize: (cols: number, rows: number) => void;
-  handleKeyEvent: (event: KeyboardEvent) => boolean;
-  handleMouseUp: (event: MouseEvent) => void;
-  handleMouseDown: (event: MouseEvent) => void;
-}
-
-const TERMINAL_HOST_GRACE_MS = 2000;
-const terminalHostCache = new Map<string, TerminalHost>();
-let nextTerminalHostId = 1;
-
-function createTerminalHost(): TerminalHost {
-  const element = document.createElement("div");
-  element.className = "fullscreen-terminal-host";
-
-  const terminal = new Terminal({
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
-    fontSize: 14,
-    theme: {
-      background: "#1a1a2e",
-      foreground: "#d4d4d4",
-      cursor: "#d4d4d4",
-    },
-    altClickMovesCursor: false,
-    cursorBlink: true,
-  });
-
-  const fitAddon = new FitAddon();
-  terminal.loadAddon(fitAddon);
-  terminal.open(element);
-
-  const host: TerminalHost = {
-    hostId: nextTerminalHostId,
-    element,
-    terminal,
-    fitAddon,
-    disposeTimer: null,
-    hydrated: false,
-    lastWritten: 0,
-    startOffset: 0,
-    handleData: () => {},
-    handleResize: () => {},
-    handleKeyEvent: () => true,
-    handleMouseUp: () => {},
-    handleMouseDown: () => {},
-  };
-  nextTerminalHostId += 1;
-
-  terminal.onData((data) => host.handleData(data));
-  terminal.onResize(({ cols, rows }) => host.handleResize(cols, rows));
-  terminal.attachCustomKeyEventHandler((event) => host.handleKeyEvent(event));
-  element.addEventListener("mouseup", (event) => host.handleMouseUp(event), true);
-  element.addEventListener("mousedown", (event) => host.handleMouseDown(event), true);
-
-  logDiagnostics("FullscreenTerminal", "host-create", {
-    hostId: host.hostId,
-    terminalCols: terminal.cols,
-    terminalRows: terminal.rows,
-  });
-
-  return host;
-}
-
-function acquireTerminalHost(sessionId: string): TerminalHost {
-  const cachedHost = terminalHostCache.get(sessionId);
-  if (cachedHost) {
-    if (cachedHost.disposeTimer !== null) {
-      window.clearTimeout(cachedHost.disposeTimer);
-      cachedHost.disposeTimer = null;
-    }
-    logDiagnostics("FullscreenTerminal", "host-acquire", {
-      sessionId,
-      hostId: cachedHost.hostId,
-      reused: true,
-      hostConnected: cachedHost.element.isConnected,
-    });
-    return cachedHost;
-  }
-
-  const host = createTerminalHost();
-  terminalHostCache.set(sessionId, host);
-  logDiagnostics("FullscreenTerminal", "host-acquire", {
-    sessionId,
-    hostId: host.hostId,
-    reused: false,
-    hostConnected: host.element.isConnected,
-  });
-  return host;
-}
-
-function releaseTerminalHost(sessionId: string) {
-  const host = terminalHostCache.get(sessionId);
-  if (!host || host.disposeTimer !== null) {
-    return;
-  }
-
-  logDiagnostics("FullscreenTerminal", "host-release-scheduled", {
-    sessionId,
-    hostId: host.hostId,
-    graceMs: TERMINAL_HOST_GRACE_MS,
-    hostConnected: host.element.isConnected,
-  });
-
-  host.disposeTimer = window.setTimeout(() => {
-    host.disposeTimer = null;
-    host.terminal.dispose();
-    terminalHostCache.delete(sessionId);
-    logDiagnostics("FullscreenTerminal", "host-disposed", {
-      sessionId,
-      hostId: host.hostId,
-    });
-  }, TERMINAL_HOST_GRACE_MS);
-}
-
-export function resetFullscreenTerminalHostsForTest() {
-  for (const host of terminalHostCache.values()) {
-    if (host.disposeTimer !== null) {
-      window.clearTimeout(host.disposeTimer);
-    }
-    host.terminal.dispose();
-  }
-  terminalHostCache.clear();
-}
-
 export function FullscreenTerminal({
   sessionId,
   visible,
@@ -502,7 +368,6 @@ export function FullscreenTerminal({
 }: FullscreenTerminalProps) {
   const claudeRetryBudget = 24;
   const containerRef = useRef<HTMLDivElement>(null);
-  const hostRef = useRef<TerminalHost | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const lastWrittenRef = useRef(0);
@@ -514,39 +379,8 @@ export function FullscreenTerminal({
   const claudeRetryTimeoutRef = useRef<number | null>(null);
   const activationFrameRef = useRef<number | null>(null);
 
-  const createTerminalDiagnosticsSnapshot = useCallback(
-    (reason: string) => {
-      const host = hostRef.current;
-      const terminal = terminalRef.current;
-      const container = containerRef.current;
-      return {
-        reason,
-        sessionId,
-        visible,
-        isFocused: isFocusedRef.current,
-        interactiveCommandKind,
-        hostId: host?.hostId ?? null,
-        hostHydrated: host?.hydrated ?? null,
-        hostStartOffset: host?.startOffset ?? null,
-        hostLastWritten: host?.lastWritten ?? null,
-        hostConnected: host?.element.isConnected ?? false,
-        hostParentClass:
-          typeof host?.element.parentElement?.className === "string"
-            ? host.element.parentElement.className
-            : null,
-        containerWidth: container?.clientWidth ?? null,
-        containerHeight: container?.clientHeight ?? null,
-        terminalCols: terminal?.cols ?? null,
-        terminalRows: terminal?.rows ?? null,
-        rawOutputLength: rawOutputRef.current.length,
-        ...getRootDiagnosticsSnapshot(),
-      };
-    },
-    [interactiveCommandKind, sessionId, visible]
-  );
-
   const fitTerminal = useCallback(() => {
-    hostRef.current?.fitAddon.fit();
+    fitAddonRef.current?.fit();
   }, []);
 
   const clearActivationFrame = useCallback(() => {
@@ -589,39 +423,10 @@ export function FullscreenTerminal({
         return;
       }
 
-      logDiagnostics(
-        "FullscreenTerminal",
-        "focus-terminal",
-        createTerminalDiagnosticsSnapshot(`focus-terminal:setAnchor=${String(setAnchor)}`)
-      );
       terminalRef.current.focus();
       void reportTerminalCursor(setAnchor);
     },
-    [createTerminalDiagnosticsSnapshot, reportTerminalCursor, visible]
-  );
-
-  const redrawTerminal = useCallback(
-    (source: string, setAnchor: boolean) => {
-      const terminal = terminalRef.current;
-      if (!visible || !terminal) {
-        return;
-      }
-
-      logDiagnostics("FullscreenTerminal", "redraw-terminal", {
-        source,
-        setAnchor,
-        ...createTerminalDiagnosticsSnapshot(`redraw:${source}`),
-      });
-      fitTerminal();
-      terminal.refresh(0, Math.max(terminal.rows - 1, 0));
-      if (isFocusedRef.current) {
-        focusTerminal(setAnchor);
-        return;
-      }
-
-      void reportTerminalCursor(setAnchor);
-    },
-    [createTerminalDiagnosticsSnapshot, fitTerminal, focusTerminal, reportTerminalCursor, visible]
+    [reportTerminalCursor, visible]
   );
 
   const scheduleClaudeCursorCorrection = useCallback(
@@ -666,7 +471,7 @@ export function FullscreenTerminal({
   const handleTerminalMouseUp = useCallback(
     (event: MouseEvent) => {
       const terminal = terminalRef.current;
-      const container = hostRef.current?.element;
+      const container = containerRef.current;
       const pointerDown = pointerDownRef.current;
       pointerDownRef.current = null;
 
@@ -760,64 +565,38 @@ export function FullscreenTerminal({
   }, [rawOutput]);
 
   useEffect(() => {
-    logDiagnostics(
-      "FullscreenTerminal",
-      "state-change",
-      createTerminalDiagnosticsSnapshot("state-change")
-    );
-  }, [createTerminalDiagnosticsSnapshot, isFocused, rawOutput.length, sessionId, visible]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !sessionId) {
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-      hostRef.current = null;
+    if (!containerRef.current) {
+      console.log("[FullscreenTerminal] containerRef is null, skipping terminal creation");
       return;
     }
 
-    const host = acquireTerminalHost(sessionId);
-    hostRef.current = host;
-    terminalRef.current = host.terminal;
-    fitAddonRef.current = host.fitAddon;
-    container.replaceChildren(host.element);
-    logDiagnostics("FullscreenTerminal", "host-attached", {
-      ...createTerminalDiagnosticsSnapshot("host-attached"),
-      attachedHostId: host.hostId,
+    console.log("[FullscreenTerminal] Creating terminal for session:", sessionId);
+    const terminal = new Terminal({
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
+      fontSize: 14,
+      theme: {
+        background: "#1a1a2e",
+        foreground: "#d4d4d4",
+        cursor: "#d4d4d4",
+      },
+      altClickMovesCursor: false,
+      cursorBlink: true,
+      // Disable WebGL renderer to prevent white screen issues
+      // WebGL can cause rendering problems in Tauri WebView on macOS
+      allowProposedApi: false,
     });
 
-    return () => {
-      clearClaudeRetryTimeout();
-      pendingProbeRef.current = null;
-      clearActivationFrame();
-      if (host.element.parentElement === container) {
-        container.removeChild(host.element);
-      }
-      logDiagnostics("FullscreenTerminal", "host-detached", {
-        ...createTerminalDiagnosticsSnapshot("host-detached"),
-        detachedHostId: host.hostId,
-      });
-      releaseTerminalHost(sessionId);
-      hostRef.current = null;
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-    };
-  }, [
-    clearActivationFrame,
-    clearClaudeRetryTimeout,
-    fitTerminal,
-    handleTerminalMouseDown,
-    handleTerminalMouseUp,
-    sessionId,
-  ]);
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
 
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) {
-      return;
+    try {
+      terminal.open(containerRef.current);
+      console.log("[FullscreenTerminal] Terminal opened successfully");
+    } catch (error) {
+      console.error("[FullscreenTerminal] Failed to open terminal:", error);
     }
 
-    host.handleData = (data: string) => {
+    terminal.onData((data) => {
       const pendingProbe = pendingProbeRef.current;
       if (pendingProbe) {
         const nextBuffer = pendingProbe.buffer + data;
@@ -848,13 +627,14 @@ export function FullscreenTerminal({
       }
 
       onData(data);
-    };
+    });
 
-    host.handleResize = (cols: number, rows: number) => {
+    terminal.onResize(({ cols, rows }) => {
+      console.log("[FullscreenTerminal] Terminal resized:", { cols, rows });
       onResize(cols, rows);
-    };
+    });
 
-    host.handleKeyEvent = (event: KeyboardEvent) => {
+    terminal.attachCustomKeyEventHandler((event) => {
       if (event.metaKey && event.key === "Backspace") {
         onData("\x15");
         return false;
@@ -875,11 +655,27 @@ export function FullscreenTerminal({
         return false;
       }
       return true;
-    };
+    });
 
-    host.handleMouseUp = handleTerminalMouseUp;
-    host.handleMouseDown = handleTerminalMouseDown;
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+    containerRef.current.addEventListener("mouseup", handleTerminalMouseUp, true);
+    containerRef.current.addEventListener("mousedown", handleTerminalMouseDown, true);
+
+    return () => {
+      console.log("[FullscreenTerminal] Cleaning up terminal");
+      clearClaudeRetryTimeout();
+      pendingProbeRef.current = null;
+      clearActivationFrame();
+      containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
+      containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
+      terminal.dispose();
+      console.log("[FullscreenTerminal] Terminal disposed");
+    };
   }, [
+    clearActivationFrame,
+    clearClaudeRetryTimeout,
+    fitTerminal,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
     onData,
@@ -889,33 +685,20 @@ export function FullscreenTerminal({
   ]);
 
   useEffect(() => {
-    const host = hostRef.current;
-    if (visible && host) {
+    if (visible && fitAddonRef.current) {
       clearActivationFrame();
       clearClaudeRetryTimeout();
-      if (!host.hydrated || host.startOffset !== startOffset) {
-        host.hydrated = false;
-        isHydratedRef.current = false;
-        host.terminal.reset();
-        host.lastWritten = startOffset;
-        lastWrittenRef.current = startOffset;
-        logDiagnostics("FullscreenTerminal", "hydrate-reset", {
-          ...createTerminalDiagnosticsSnapshot("hydrate-reset"),
-          nextStartOffset: startOffset,
-        });
-      }
+      isHydratedRef.current = false;
+      terminalRef.current?.reset();
+      lastWrittenRef.current = startOffset;
       const activateWhenSized = (attemptsRemaining: number) => {
         const container = containerRef.current;
-        if (!container || !hostRef.current) {
+        if (!container || !terminalRef.current) {
           activationFrameRef.current = null;
           return;
         }
 
         if ((container.clientWidth <= 0 || container.clientHeight <= 0) && attemptsRemaining > 0) {
-          logDiagnostics("FullscreenTerminal", "activate-waiting-for-size", {
-            ...createTerminalDiagnosticsSnapshot("activate-waiting-for-size"),
-            attemptsRemaining,
-          });
           activationFrameRef.current = window.requestAnimationFrame(() =>
             activateWhenSized(attemptsRemaining - 1)
           );
@@ -924,24 +707,19 @@ export function FullscreenTerminal({
 
         activationFrameRef.current = null;
         fitTerminal();
-        if (!host.hydrated || host.startOffset !== startOffset) {
-          const initialData = rawOutputRef.current.slice(startOffset);
-          if (initialData.length > 0) {
-            host.terminal.write(initialData);
+        const initialData = rawOutputRef.current.slice(startOffset);
+        if (initialData.length > 0) {
+          console.log("[FullscreenTerminal] Writing initial data:", initialData.length, "bytes");
+          try {
+            terminalRef.current.write(initialData);
+            console.log("[FullscreenTerminal] Initial data written successfully");
+          } catch (error) {
+            console.error("[FullscreenTerminal] Failed to write initial data:", error);
           }
-        } else if (rawOutputRef.current.length > host.lastWritten) {
-          host.terminal.write(rawOutputRef.current.slice(host.lastWritten));
         }
-        host.lastWritten = rawOutputRef.current.length;
-        host.startOffset = startOffset;
-        host.hydrated = true;
-        lastWrittenRef.current = host.lastWritten;
+        lastWrittenRef.current = rawOutputRef.current.length;
         isHydratedRef.current = true;
-        logDiagnostics("FullscreenTerminal", "hydrate-complete", {
-          ...createTerminalDiagnosticsSnapshot("hydrate-complete"),
-          initialWriteLength: rawOutputRef.current.length - startOffset,
-        });
-        onReady(host.terminal.cols, host.terminal.rows);
+        onReady(terminalRef.current.cols, terminalRef.current.rows);
         if (isFocusedRef.current) {
           focusTerminal(true);
         }
@@ -955,11 +733,6 @@ export function FullscreenTerminal({
     } else if (sessionId) {
       clearActivationFrame();
       clearClaudeRetryTimeout();
-      const currentHost = hostRef.current;
-      if (currentHost) {
-        currentHost.hydrated = false;
-        currentHost.startOffset = -1;
-      }
       isHydratedRef.current = false;
       void invoke("clear_interactive_input_anchor", { sessionId });
     }
@@ -975,6 +748,13 @@ export function FullscreenTerminal({
   ]);
 
   useEffect(() => {
+    console.log("[FullscreenTerminal] Component mounted/updated:", { sessionId, visible, rawOutputLength: rawOutput.length });
+    return () => {
+      console.log("[FullscreenTerminal] Component unmounting");
+    };
+  }, [sessionId, visible, rawOutput.length]);
+
+  useEffect(() => {
     if (
       visible &&
       isHydratedRef.current &&
@@ -982,9 +762,12 @@ export function FullscreenTerminal({
       rawOutput.length > lastWrittenRef.current
     ) {
       const newData = rawOutput.slice(lastWrittenRef.current);
-      terminalRef.current.write(newData);
-      if (hostRef.current) {
-        hostRef.current.lastWritten = rawOutput.length;
+      console.log("[FullscreenTerminal] Writing incremental data:", newData.length, "bytes");
+      try {
+        terminalRef.current.write(newData);
+        console.log("[FullscreenTerminal] Incremental data written successfully");
+      } catch (error) {
+        console.error("[FullscreenTerminal] Failed to write to terminal:", error);
       }
       lastWrittenRef.current = rawOutput.length;
     }
@@ -992,13 +775,13 @@ export function FullscreenTerminal({
 
   useEffect(() => {
     const handleResize = () => {
-      if (visible && terminalRef.current) {
-        redrawTerminal("window.resize", false);
+      if (visible && fitAddonRef.current) {
+        fitTerminal();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [redrawTerminal, visible]);
+  }, [fitTerminal, visible]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -1011,7 +794,8 @@ export function FullscreenTerminal({
         return;
       }
 
-      redrawTerminal("observer.resize", false);
+      fitTerminal();
+      void reportTerminalCursor(false);
     });
 
     observer.observe(container);
@@ -1019,29 +803,7 @@ export function FullscreenTerminal({
     return () => {
       observer.disconnect();
     };
-  }, [redrawTerminal, visible]);
-
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      redrawTerminal("document.visibilitychange", true);
-    };
-
-    const handleWindowFocus = () => {
-      redrawTerminal("window.focus", true);
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleWindowFocus);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleWindowFocus);
-    };
-  }, [redrawTerminal]);
+  }, [fitTerminal, reportTerminalCursor, visible]);
 
   useEffect(() => {
     if (!sessionId || !visible) {

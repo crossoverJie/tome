@@ -6,11 +6,6 @@ import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
 import { useTabs } from "./hooks/useTabs";
 import { setPaneSessionInitOptions } from "./hooks/sessionState";
-import {
-  getRootDiagnosticsSnapshot,
-  isDiagnosticsEnabled,
-  logDiagnostics,
-} from "./utils/diagnostics";
 import { getTabCurrentDirectory, getTabDisplayTitle, getWindowTitle } from "./utils/workdir";
 import "./App.css";
 
@@ -38,25 +33,6 @@ function App() {
   >(new Map());
   const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
-  const totalPaneCount = useMemo(
-    () => tabs.reduce((count, tab) => count + tab.panes.size, 0),
-    [tabs]
-  );
-
-  const createAppDiagnosticsSnapshot = useCallback(
-    (reason: string) => ({
-      reason,
-      totalTabs: tabs.length,
-      totalPanes: totalPaneCount,
-      activeTabId,
-      activeTabRootPaneId: activeTab?.rootPaneId ?? null,
-      activeTabPaneCount: activeTab?.panes.size ?? 0,
-      focusedPaneId,
-      showSettings,
-      ...getRootDiagnosticsSnapshot(),
-    }),
-    [activeTab, activeTabId, focusedPaneId, showSettings, tabs.length, totalPaneCount]
-  );
 
   // Get the currently focused pane's block info for copy command
   const getFocusedPaneBlocks = useCallback(() => {
@@ -218,6 +194,7 @@ function App() {
 
   // Clean up closed pane data from blockSelectionMap
   useEffect(() => {
+    console.log("[App] Tabs changed, cleaning up pane data");
     const allPaneIds = new Set<string>();
     for (const tab of tabs) {
       for (const paneId of tab.panes.keys()) {
@@ -256,87 +233,7 @@ function App() {
       });
   }, [activeTabCurrentDirectory]);
 
-  useEffect(() => {
-    logDiagnostics("App", "mount", createAppDiagnosticsSnapshot("mount"));
-    return () => {
-      logDiagnostics("App", "unmount", createAppDiagnosticsSnapshot("unmount"));
-    };
-  }, [createAppDiagnosticsSnapshot]);
-
-  useEffect(() => {
-    logDiagnostics("App", "state-change", createAppDiagnosticsSnapshot("state-change"));
-  }, [createAppDiagnosticsSnapshot]);
-
-  useEffect(() => {
-    const logWindowLifecycle = (eventName: string) => {
-      logDiagnostics("App", eventName, createAppDiagnosticsSnapshot(eventName));
-    };
-
-    const handleVisibilityChange = () => logWindowLifecycle("document.visibilitychange");
-    const handleFocus = () => logWindowLifecycle("window.focus");
-    const handleBlur = () => logWindowLifecycle("window.blur");
-    const handleResize = () => logWindowLifecycle("window.resize");
-    const handlePageShow = () => logWindowLifecycle("window.pageshow");
-    const handlePageHide = () => logWindowLifecycle("window.pagehide");
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("blur", handleBlur);
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("pageshow", handlePageShow);
-    window.addEventListener("pagehide", handlePageHide);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("blur", handleBlur);
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("pageshow", handlePageShow);
-      window.removeEventListener("pagehide", handlePageHide);
-    };
-  }, [createAppDiagnosticsSnapshot]);
-
-  useEffect(() => {
-    const handleWindowError = (event: ErrorEvent) => {
-      logDiagnostics("App", "window.error", {
-        message: event.message,
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error,
-        ...createAppDiagnosticsSnapshot("window.error"),
-      });
-    };
-
-    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      logDiagnostics("App", "window.unhandledrejection", {
-        rejectionReason: event.reason,
-        ...createAppDiagnosticsSnapshot("window.unhandledrejection"),
-      });
-    };
-
-    window.addEventListener("error", handleWindowError);
-    window.addEventListener("unhandledrejection", handleUnhandledRejection);
-
-    return () => {
-      window.removeEventListener("error", handleWindowError);
-      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
-    };
-  }, [createAppDiagnosticsSnapshot]);
-
-  useEffect(() => {
-    if (!isDiagnosticsEnabled()) {
-      return;
-    }
-
-    const heartbeat = window.setInterval(() => {
-      logDiagnostics("App", "heartbeat", createAppDiagnosticsSnapshot("heartbeat"));
-    }, 5000);
-
-    return () => {
-      window.clearInterval(heartbeat);
-    };
-  }, [createAppDiagnosticsSnapshot]);
+  console.log("[App] Rendering, tabs:", tabs.length, "activeTab:", activeTabId);
 
   return (
     <div className="app" ref={containerRef}>
