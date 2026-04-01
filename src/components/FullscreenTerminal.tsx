@@ -384,7 +384,10 @@ export function FullscreenTerminal({
     compositionstartHandler: () => void;
     compositionendHandler: () => void;
     inputHandler: (e: Event) => void;
+    blurHandler: () => void;
   } | null>(null);
+  const pendingInputDataRef = useRef<string | null>(null);
+  const recentXtermDataRef = useRef<string[]>([]);
 
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
@@ -593,6 +596,12 @@ export function FullscreenTerminal({
     terminal.open(containerRef.current);
 
     terminal.onData((data) => {
+      // Record recent xterm data for comparison with input events
+      recentXtermDataRef.current.push(data);
+      if (recentXtermDataRef.current.length > 10) {
+        recentXtermDataRef.current.shift();
+      }
+
       const pendingProbe = pendingProbeRef.current;
       if (pendingProbe) {
         const nextBuffer = pendingProbe.buffer + data;
@@ -667,20 +676,38 @@ export function FullscreenTerminal({
         };
         const inputHandler = (e: Event): void => {
           if (!(e instanceof InputEvent)) return;
-          if (e.data && !e.isComposing) {
-            onData(e.data);
+          const inputData = e.data;
+          if (inputData && !e.isComposing) {
+            // Check if xterm already handled this input
+            setTimeout(() => {
+              const wasHandled = recentXtermDataRef.current.includes(inputData);
+              if (!wasHandled) {
+                onData(inputData);
+              } else {
+                // Remove from recent list to avoid false positives
+                const index = recentXtermDataRef.current.indexOf(inputData);
+                if (index > -1) {
+                  recentXtermDataRef.current.splice(index, 1);
+                }
+              }
+            }, 10);
           }
+        };
+        const blurHandler = (): void => {
+          // Blur handler kept for potential future use
         };
 
         textarea.addEventListener("compositionstart", compositionstartHandler);
         textarea.addEventListener("compositionend", compositionendHandler);
         textarea.addEventListener("input", inputHandler);
+        textarea.addEventListener("blur", blurHandler);
 
         textareaListenersRef.current = {
           textarea,
           compositionstartHandler,
           compositionendHandler,
           inputHandler,
+          blurHandler,
         };
       } else if (retriesRemaining > 0) {
         // Retry after a short delay
@@ -701,16 +728,18 @@ export function FullscreenTerminal({
 
       // Remove textarea event listeners
       if (textareaListenersRef.current) {
-        const { textarea, compositionstartHandler, compositionendHandler, inputHandler } =
+        const { textarea, compositionstartHandler, compositionendHandler, inputHandler, blurHandler } =
           textareaListenersRef.current;
         textarea.removeEventListener("compositionstart", compositionstartHandler);
         textarea.removeEventListener("compositionend", compositionendHandler);
         textarea.removeEventListener("input", inputHandler);
+        textarea.removeEventListener("blur", blurHandler);
         textareaListenersRef.current = null;
       }
 
       // Reset composing state
       isComposingRef.current = false;
+      pendingInputDataRef.current = null;
 
       containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
       containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
