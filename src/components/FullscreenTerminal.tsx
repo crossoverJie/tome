@@ -378,6 +378,7 @@ export function FullscreenTerminal({
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const claudeRetryTimeoutRef = useRef<number | null>(null);
   const activationFrameRef = useRef<number | null>(null);
+  const isComposingRef = useRef(false);
 
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
@@ -395,7 +396,8 @@ export function FullscreenTerminal({
       if (
         !sessionId ||
         !terminalRef.current ||
-        terminalRef.current.buffer.active.type === "alternate"
+        terminalRef.current.buffer.active.type === "alternate" ||
+        isComposingRef.current
       ) {
         return false;
       }
@@ -436,6 +438,7 @@ export function FullscreenTerminal({
         return;
       }
 
+      const delay = retriesRemaining === claudeRetryBudget ? 150 : 48;
       claudeRetryTimeoutRef.current = window.setTimeout(() => {
         claudeRetryTimeoutRef.current = null;
         reportTerminalCursor(false)
@@ -447,7 +450,7 @@ export function FullscreenTerminal({
           .catch(() => {
             clearClaudeRetryTimeout();
           });
-      }, 48);
+      }, delay);
     },
     [clearClaudeRetryTimeout, reportTerminalCursor]
   );
@@ -621,6 +624,9 @@ export function FullscreenTerminal({
     });
 
     terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type !== "keydown") {
+        return true;
+      }
       if (event.metaKey && event.key === "Backspace") {
         onData("\x15");
         return false;
@@ -634,9 +640,6 @@ export function FullscreenTerminal({
         return false;
       }
       if (event.shiftKey && event.key === "Enter") {
-        if (event.type !== "keydown") {
-          return false;
-        }
         onData("\x1b[13;2u");
         return false;
       }
@@ -645,6 +648,26 @@ export function FullscreenTerminal({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    // Wait for textarea to be created by xterm
+    setTimeout(() => {
+      const textarea = containerRef.current?.querySelector("textarea");
+      if (textarea) {
+        textarea.addEventListener("compositionstart", () => {
+          isComposingRef.current = true;
+        });
+        textarea.addEventListener("compositionend", () => {
+          isComposingRef.current = false;
+        });
+        textarea.addEventListener("input", (e) => {
+          const inputEvent = e as InputEvent;
+          if (inputEvent.data && !inputEvent.isComposing) {
+            onData(inputEvent.data);
+          }
+        });
+      }
+    }, 0);
+
     containerRef.current.addEventListener("mouseup", handleTerminalMouseUp, true);
     containerRef.current.addEventListener("mousedown", handleTerminalMouseDown, true);
 
@@ -659,11 +682,8 @@ export function FullscreenTerminal({
   }, [
     clearActivationFrame,
     clearClaudeRetryTimeout,
-    fitTerminal,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
-    onData,
-    onResize,
     requestCursorProbe,
     sessionId,
   ]);
