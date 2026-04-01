@@ -379,6 +379,12 @@ export function FullscreenTerminal({
   const claudeRetryTimeoutRef = useRef<number | null>(null);
   const activationFrameRef = useRef<number | null>(null);
   const isComposingRef = useRef(false);
+  const textareaListenersRef = useRef<{
+    textarea: HTMLTextAreaElement;
+    compositionstartHandler: () => void;
+    compositionendHandler: () => void;
+    inputHandler: (e: Event) => void;
+  } | null>(null);
 
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
@@ -649,24 +655,41 @@ export function FullscreenTerminal({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // Wait for textarea to be created by xterm
-    setTimeout(() => {
+    // Attach to textarea with retry logic to handle xterm's async textarea creation
+    const attachToTextarea = (retriesRemaining: number): void => {
       const textarea = containerRef.current?.querySelector("textarea");
       if (textarea) {
-        textarea.addEventListener("compositionstart", () => {
+        const compositionstartHandler = (): void => {
           isComposingRef.current = true;
-        });
-        textarea.addEventListener("compositionend", () => {
+        };
+        const compositionendHandler = (): void => {
           isComposingRef.current = false;
-        });
-        textarea.addEventListener("input", (e) => {
-          const inputEvent = e as InputEvent;
-          if (inputEvent.data && !inputEvent.isComposing) {
-            onData(inputEvent.data);
+        };
+        const inputHandler = (e: Event): void => {
+          if (!(e instanceof InputEvent)) return;
+          if (e.data && !e.isComposing) {
+            onData(e.data);
           }
-        });
+        };
+
+        textarea.addEventListener("compositionstart", compositionstartHandler);
+        textarea.addEventListener("compositionend", compositionendHandler);
+        textarea.addEventListener("input", inputHandler);
+
+        textareaListenersRef.current = {
+          textarea,
+          compositionstartHandler,
+          compositionendHandler,
+          inputHandler,
+        };
+      } else if (retriesRemaining > 0) {
+        // Retry after a short delay
+        setTimeout(() => attachToTextarea(retriesRemaining - 1), 50);
       }
-    }, 0);
+    };
+
+    // Start attachment with retry budget
+    attachToTextarea(20);
 
     containerRef.current.addEventListener("mouseup", handleTerminalMouseUp, true);
     containerRef.current.addEventListener("mousedown", handleTerminalMouseDown, true);
@@ -675,6 +698,20 @@ export function FullscreenTerminal({
       clearClaudeRetryTimeout();
       pendingProbeRef.current = null;
       clearActivationFrame();
+
+      // Remove textarea event listeners
+      if (textareaListenersRef.current) {
+        const { textarea, compositionstartHandler, compositionendHandler, inputHandler } =
+          textareaListenersRef.current;
+        textarea.removeEventListener("compositionstart", compositionstartHandler);
+        textarea.removeEventListener("compositionend", compositionendHandler);
+        textarea.removeEventListener("input", inputHandler);
+        textareaListenersRef.current = null;
+      }
+
+      // Reset composing state
+      isComposingRef.current = false;
+
       containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
       containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
       terminal.dispose();
