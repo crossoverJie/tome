@@ -24,22 +24,22 @@ export function SplitPaneContainer({
   style,
 }: SplitPaneContainerProps) {
   const paneRef = useRef<HTMLDivElement>(null);
+  const resizerLayerRefs = useRef(new Map<string, HTMLDivElement>());
   const layout = useMemo(() => computePaneLayout(panes, paneId), [panes, paneId]);
 
   // Handle resize by calculating new ratio based on delta
   const handleResize = useCallback(
-    (splitPaneId: string, containerFraction: number, axis: "width" | "height", delta: number) => {
+    (splitPaneId: string, axis: "width" | "height", delta: number) => {
       const splitPane = panes.get(splitPaneId);
       if (!splitPane || splitPane.type !== "split") {
         return;
       }
 
-      const container = paneRef.current;
+      const container = resizerLayerRefs.current.get(splitPaneId);
       if (!container) return;
 
       const rect = container.getBoundingClientRect();
-      const rootSize = axis === "width" ? rect.width : rect.height;
-      const containerSize = rootSize * containerFraction;
+      const containerSize = axis === "width" ? rect.width : rect.height;
 
       if (containerSize === 0) return;
 
@@ -83,35 +83,58 @@ export function SplitPaneContainer({
         <div
           key={resizer.splitPaneId}
           className={`split-resizer-layer ${resizer.direction}`}
+          ref={(node) => {
+            if (node) {
+              resizerLayerRefs.current.set(resizer.splitPaneId, node);
+            } else {
+              resizerLayerRefs.current.delete(resizer.splitPaneId);
+            }
+          }}
           style={
             resizer.direction === "horizontal"
               ? {
-                  left: `calc(${resizer.x * 100}% - 2px)`,
-                  top: `${resizer.y * 100}%`,
-                  width: "4px",
-                  height: `${resizer.height * 100}%`,
+                  left: `${resizer.containerX * 100}%`,
+                  top: `${resizer.containerY * 100}%`,
+                  width: `${resizer.containerWidth * 100}%`,
+                  height: `${resizer.containerHeight * 100}%`,
                 }
               : {
-                  left: `${resizer.x * 100}%`,
-                  top: `calc(${resizer.y * 100}% - 2px)`,
-                  width: `${resizer.width * 100}%`,
-                  height: "4px",
+                  left: `${resizer.containerX * 100}%`,
+                  top: `${resizer.containerY * 100}%`,
+                  width: `${resizer.containerWidth * 100}%`,
+                  height: `${resizer.containerHeight * 100}%`,
                 }
           }
         >
-          <Resizer
-            direction={resizer.direction}
-            onResize={(delta) =>
-              handleResize(
-                resizer.splitPaneId,
-                resizer.direction === "horizontal"
-                  ? resizer.containerWidth
-                  : resizer.containerHeight,
-                resizer.direction === "horizontal" ? "width" : "height",
-                delta
-              )
+          <div
+            className={`split-resizer-handle ${resizer.direction}`}
+            style={
+              resizer.direction === "horizontal"
+                ? {
+                    left: `calc(${(resizer.handleOffset / resizer.containerWidth) * 100}% - 2px)`,
+                    top: 0,
+                    width: "4px",
+                    height: "100%",
+                  }
+                : {
+                    left: 0,
+                    top: `calc(${(resizer.handleOffset / resizer.containerHeight) * 100}% - 2px)`,
+                    width: "100%",
+                    height: "4px",
+                  }
             }
-          />
+          >
+            <Resizer
+              direction={resizer.direction}
+              onResize={(delta) =>
+                handleResize(
+                  resizer.splitPaneId,
+                  resizer.direction === "horizontal" ? "width" : "height",
+                  delta
+                )
+              }
+            />
+          </div>
         </div>
       ))}
     </div>

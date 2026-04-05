@@ -23,7 +23,7 @@ export type FullscreenSessionEvent =
       commandKind: InteractiveCommandKind;
       startOffset: number;
     }
-  | { type: "interactive-command-ended"; endOffset: number }
+  | { type: "fullscreen-session-ended"; endOffset: number }
   | { type: "alternate-screen-entered"; startOffset: number }
   | { type: "alternate-screen-exited"; endOffset: number }
   | { type: "pane-resized" }
@@ -76,7 +76,7 @@ export function fullscreenSessionReducer(
         startOffset: event.startOffset,
         pendingLaunch: false,
       };
-    case "interactive-command-ended":
+    case "fullscreen-session-ended":
       return {
         ...createFullscreenSessionState(),
         startOffset: event.endOffset,

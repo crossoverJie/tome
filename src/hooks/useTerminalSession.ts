@@ -620,7 +620,7 @@ export function useTerminalSession(
                   pendingClaudeLaunchRef.current = null;
                   scheduleRawOutputPublish(true);
                   applyFullscreenEvent({
-                    type: "interactive-command-ended",
+                    type: "fullscreen-session-ended",
                     endOffset: getRawOutputEndOffset(),
                   });
                   setBlocks((prev) => {

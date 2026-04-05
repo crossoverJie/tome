@@ -526,11 +526,6 @@ body {
 
 /* Split Pane Styles */
 
-.split-container {
-  flex: 1;
-  overflow: hidden;
-}
-
 .split-layout {
   position: relative;
   flex: 1;
@@ -553,6 +548,12 @@ body {
 .split-resizer-layer {
   position: absolute;
   z-index: 5;
+  pointer-events: none;
+}
+
+.split-resizer-handle {
+  position: absolute;
+  pointer-events: auto;
 }
 
 .split-resizer-layer .resizer {

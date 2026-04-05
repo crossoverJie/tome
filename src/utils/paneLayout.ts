@@ -11,12 +11,15 @@ export interface PaneLeafLayout {
 export interface PaneResizerLayout {
   splitPaneId: string;
   direction: SplitDirection;
+  containerX: number;
+  containerY: number;
+  containerWidth: number;
+  containerHeight: number;
+  handleOffset: number;
   x: number;
   y: number;
   width: number;
   height: number;
-  containerWidth: number;
-  containerHeight: number;
 }
 
 export interface PaneLayoutResult {
@@ -66,12 +69,15 @@ export function computePaneLayout(
       resizers.push({
         splitPaneId: paneId,
         direction: "horizontal",
+        containerX: bounds.x,
+        containerY: bounds.y,
+        containerWidth: bounds.width,
+        containerHeight: bounds.height,
+        handleOffset: firstWidth,
         x: bounds.x + firstWidth,
         y: bounds.y,
         width: 0,
         height: bounds.height,
-        containerWidth: bounds.width,
-        containerHeight: bounds.height,
       });
 
       walk(firstChildId, {
@@ -95,12 +101,15 @@ export function computePaneLayout(
     resizers.push({
       splitPaneId: paneId,
       direction: "vertical",
+      containerX: bounds.x,
+      containerY: bounds.y,
+      containerWidth: bounds.width,
+      containerHeight: bounds.height,
+      handleOffset: firstHeight,
       x: bounds.x,
       y: bounds.y + firstHeight,
       width: bounds.width,
       height: 0,
-      containerWidth: bounds.width,
-      containerHeight: bounds.height,
     });
 
     walk(firstChildId, {
