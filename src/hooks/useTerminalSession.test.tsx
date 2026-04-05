@@ -1,8 +1,12 @@
 import { StrictMode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearAllSessionState, setPaneSessionInitOptions } from "./sessionState";
+import { clearAllSessionState, getSessionState, setPaneSessionInitOptions } from "./sessionState";
 import { useTerminalSession } from "./useTerminalSession";
+import {
+  FULLSCREEN_REPLAY_BUFFER_LIMIT,
+  FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET,
+} from "../utils/rawOutputBuffer";
 
 type TerminalEventPayload =
   | { kind: "current_directory"; session_id: string; path: string }
@@ -253,7 +257,11 @@ describe("useTerminalSession", () => {
       });
     });
 
-    const preCommandStartLength = result.current.rawOutput.length;
+    await waitFor(() => {
+      expect(result.current.getRawOutputSnapshot().rawOutput).toContain("claude --continue");
+    });
+
+    const preCommandStartLength = result.current.getRawOutputSnapshot().rawOutput.length;
 
     act(() => {
       terminalEventListener?.({
@@ -280,7 +288,9 @@ describe("useTerminalSession", () => {
       });
     });
 
-    expect(result.current.rawOutput).toContain("claude ui");
+    await waitFor(() => {
+      expect(result.current.getRawOutputSnapshot().rawOutput).toContain("claude ui");
+    });
     expect(activeBlock?.output ?? "").toBe("");
 
     act(() => {
@@ -395,8 +405,176 @@ describe("useTerminalSession", () => {
       });
     });
 
-    expect(result.current.rawOutput).toBe("Claude Code\n");
+    await waitFor(() => {
+      expect(result.current.getRawOutputSnapshot().rawOutput).toBe("Claude Code\n");
+    });
     const block = result.current.blocks[result.current.blocks.length - 1];
     expect(block?.output ?? "").toBe("");
+  });
+
+  it("keeps fullscreen raw output off published state while exposing the latest snapshot", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await flushAsyncWork();
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("claude\n");
+      result.current.notifyFullscreenReady(120, 40);
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: "hello",
+        },
+      });
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: " world",
+        },
+      });
+    });
+
+    expect(result.current.rawOutput).toBe("");
+    expect(result.current.getRawOutputSnapshot().rawOutput).toBe("hello world");
+  });
+
+  it("does not mirror active fullscreen raw output into persisted session state until exit", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await flushAsyncWork();
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("claude\n");
+      result.current.notifyFullscreenReady(120, 40);
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: "streaming ui",
+        },
+      });
+    });
+
+    expect(result.current.rawOutput).toBe("");
+    expect(result.current.getRawOutputSnapshot().rawOutput).toBe("streaming ui");
+    expect(getSessionState("session-1")?.rawOutput).toBe("");
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_end",
+          exit_code: 0,
+        },
+      });
+    });
+
+    await flushAsyncWork();
+
+    expect(getSessionState("session-1")?.rawOutput).toBe("streaming ui");
+  });
+
+  it("uses the fullscreen replay budget without rewriting the absolute start offset", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isInputReady).toBe(true);
+    });
+
+    act(() => {
+      result.current.sendInput("claude\n");
+      result.current.notifyFullscreenReady(120, 40);
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    expect(result.current.fullscreenOutputStart).toBe(0);
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: "x".repeat(FULLSCREEN_REPLAY_BUFFER_LIMIT + 32),
+        },
+      });
+    });
+
+    await waitFor(() => {
+      const snapshot = result.current.getRawOutputSnapshot();
+      expect(snapshot.rawOutput.length).toBe(FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET);
+      expect(snapshot.rawOutputBaseOffset).toBe(
+        FULLSCREEN_REPLAY_BUFFER_LIMIT + 32 - FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET
+      );
+    });
+    expect(result.current.fullscreenOutputStart).toBe(0);
   });
 });

@@ -260,6 +260,18 @@ body {
   color: var(--text-primary);
 }
 
+.diagnostic-error-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  margin: 16px;
+}
+
 .search-nav-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

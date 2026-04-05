@@ -6,6 +6,7 @@ import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
 import { useTabs } from "./hooks/useTabs";
 import { setPaneSessionInitOptions } from "./hooks/sessionState";
+import { getRootDiagnosticsSnapshot, logDiagnostics } from "./utils/diagnostics";
 import { getTabCurrentDirectory, getTabDisplayTitle, getWindowTitle } from "./utils/workdir";
 import "./App.css";
 
@@ -33,6 +34,30 @@ function App() {
   >(new Map());
   const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
+  const latestAppSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const totalPaneCount = useMemo(
+    () => tabs.reduce((count, tab) => count + tab.panes.size, 0),
+    [tabs]
+  );
+
+  const createAppDiagnosticsSnapshot = useCallback(
+    (reason: string) => ({
+      reason,
+      totalTabs: tabs.length,
+      totalPanes: totalPaneCount,
+      activeTabId,
+      activeTabRootPaneId: activeTab?.rootPaneId ?? null,
+      activeTabPaneCount: activeTab?.panes.size ?? 0,
+      focusedPaneId,
+      showSettings,
+      ...getRootDiagnosticsSnapshot(),
+    }),
+    [activeTab, activeTabId, focusedPaneId, showSettings, tabs.length, totalPaneCount]
+  );
+
+  useEffect(() => {
+    latestAppSnapshotRef.current = createAppDiagnosticsSnapshot("latest");
+  }, [createAppDiagnosticsSnapshot]);
 
   // Get the currently focused pane's block info for copy command
   const getFocusedPaneBlocks = useCallback(() => {
@@ -92,6 +117,14 @@ function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey) {
+        logDiagnostics("App", "shortcut", {
+          key: e.key,
+          shiftKey: e.shiftKey,
+          ...createAppDiagnosticsSnapshot("shortcut"),
+        });
+      }
+
       // Settings toggle: Cmd+,
       if (e.metaKey && e.key === ",") {
         e.preventDefault();
@@ -182,6 +215,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     createTab,
+    createAppDiagnosticsSnapshot,
     switchTabByIndex,
     handleSplitPane,
     closePane,
@@ -231,6 +265,50 @@ function App() {
         console.error("Failed to update window title", error);
       });
   }, [activeTabCurrentDirectory]);
+
+  useEffect(() => {
+    logDiagnostics("App", "mount", createAppDiagnosticsSnapshot("mount"));
+
+    return () => {
+      logDiagnostics("App", "unmount", {
+        ...(latestAppSnapshotRef.current ?? {}),
+        reason: "unmount",
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    logDiagnostics("App", "state-change", createAppDiagnosticsSnapshot("state-change"));
+  }, [createAppDiagnosticsSnapshot]);
+
+  useEffect(() => {
+    const logWindowEvent = (eventName: string) => {
+      logDiagnostics("App", eventName, createAppDiagnosticsSnapshot(eventName));
+    };
+
+    const handleVisibilityChange = () => logWindowEvent("visibilitychange");
+    const handleFocus = () => logWindowEvent("window-focus");
+    const handleBlur = () => logWindowEvent("window-blur");
+    const handleResize = () => logWindowEvent("window-resize");
+    const handlePageShow = () => logWindowEvent("pageshow");
+    const handlePageHide = () => logWindowEvent("pagehide");
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [createAppDiagnosticsSnapshot]);
 
   return (
     <div className="app" ref={containerRef}>

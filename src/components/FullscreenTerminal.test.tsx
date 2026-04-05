@@ -1,5 +1,6 @@
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Terminal } from "@xterm/xterm";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 
 const terminalMocks = vi.hoisted(() => {
@@ -241,7 +242,196 @@ describe("FullscreenTerminal", () => {
       />
     );
 
+    expect(terminalMocks.write).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
     expect(terminalMocks.write).toHaveBeenCalledWith("/model");
+  });
+
+  it("coalesces multiple stream updates into one terminal write per flush", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    const { rerender } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={6}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"shell\nclaude"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.write.mockClear();
+
+    rerender(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={6}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"shell\nclaude/model"}
+      />
+    );
+
+    rerender(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={6}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"shell\nclaude/model/status"}
+      />
+    );
+
+    expect(terminalMocks.write).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(terminalMocks.write).toHaveBeenCalledTimes(1);
+    expect(terminalMocks.write).toHaveBeenCalledWith("/model/status");
+  });
+
+  it("streams updates from a raw output subscription without rerendering props", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+    let notifyRawOutput: (() => void) | undefined;
+    let snapshot = {
+      rawOutput: "shell\nclaude",
+      rawOutputBaseOffset: 0,
+    };
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={6}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        getRawOutputSnapshot={() => snapshot}
+        subscribeToRawOutput={(listener) => {
+          notifyRawOutput = listener;
+          return () => {
+            notifyRawOutput = undefined;
+          };
+        }}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.write.mockClear();
+    snapshot = {
+      rawOutput: "shell\nclaude/model",
+      rawOutputBaseOffset: 0,
+    };
+
+    act(() => {
+      notifyRawOutput?.();
+    });
+
+    expect(terminalMocks.write).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(terminalMocks.write).toHaveBeenCalledWith("/model");
+  });
+
+  it("creates the fullscreen xterm with a conservative scrollback cap", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"claude ui"}
+      />
+    );
+
+    expect(vi.mocked(Terminal)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scrollback: 1000,
+      })
+    );
+  });
+
+  it("continues streaming correctly after the retained raw output window shifts", () => {
+    const onData = vi.fn();
+    const onResize = vi.fn();
+    const onReady = vi.fn();
+
+    const { rerender } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        rawOutputBaseOffset={0}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"0123456789"}
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.write.mockClear();
+
+    rerender(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        rawOutputBaseOffset={5}
+        onData={onData}
+        onResize={onResize}
+        onReady={onReady}
+        rawOutput={"56789abc"}
+      />
+    );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(terminalMocks.write).toHaveBeenCalledWith("abc");
   });
 
   it("drops shell echo when the fullscreen boundary advances after activation", () => {
@@ -302,6 +492,10 @@ describe("FullscreenTerminal", () => {
         rawOutput={`${shellEcho}Claude UI`}
       />
     );
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
 
     expect(terminalMocks.write).toHaveBeenCalledWith("Claude UI");
   });
