@@ -28,6 +28,7 @@ describe("sessionState pane init options", () => {
       isInteractiveCommandActive: false,
       interactiveCommandKind: null,
       fullscreenOutputStart: 0,
+      rawOutputBaseOffset: 0,
       rawOutput: "",
       currentDirectory: null,
       gitBranch: null,

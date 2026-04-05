@@ -5,6 +5,7 @@ import { InputEditor } from "./InputEditor";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
+import { logDiagnostics } from "../utils/diagnostics";
 import { getDirectoryLabel } from "../utils/workdir";
 
 interface PaneViewProps {
@@ -29,7 +30,9 @@ export function PaneView({
     isFullscreenTerminalActive,
     interactiveCommandKind,
     fullscreenOutputStart,
-    rawOutput,
+    rawOutputBaseOffset,
+    getRawOutputSnapshot,
+    subscribeToRawOutput,
     currentDirectory,
     gitBranch,
     sendInput,
@@ -52,6 +55,7 @@ export function PaneView({
   // Search overlay visibility state (local to each pane)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
+  const latestPaneSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const fullscreenSessionLabel =
     interactiveCommandKind === "claude"
       ? "Claude"
@@ -59,6 +63,37 @@ export function PaneView({
         ? "Copilot"
         : "Terminal";
   const fullscreenPaneTitle = getDirectoryLabel(currentDirectory);
+  const createPaneDiagnosticsSnapshot = useCallback(
+    (reason: string) => ({
+      reason,
+      paneId,
+      sessionId: activeSessionId,
+      isFocused,
+      isFullscreenTerminalActive,
+      interactiveCommandKind,
+      blockCount: blocks.length,
+      selectedBlockIndex,
+      rawOutputBaseOffset,
+      fullscreenOutputStart,
+      currentDirectory,
+    }),
+    [
+      activeSessionId,
+      blocks.length,
+      currentDirectory,
+      fullscreenOutputStart,
+      interactiveCommandKind,
+      isFocused,
+      isFullscreenTerminalActive,
+      paneId,
+      rawOutputBaseOffset,
+      selectedBlockIndex,
+    ]
+  );
+
+  useEffect(() => {
+    latestPaneSnapshotRef.current = createPaneDiagnosticsSnapshot("latest");
+  }, [createPaneDiagnosticsSnapshot]);
 
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
@@ -71,12 +106,31 @@ export function PaneView({
     onWorkingDirectoryChange(paneId, currentDirectory);
   }, [paneId, currentDirectory, onWorkingDirectoryChange]);
 
+  useEffect(() => {
+    logDiagnostics("PaneView", "mount", createPaneDiagnosticsSnapshot("mount"));
+
+    return () => {
+      logDiagnostics("PaneView", "unmount", {
+        ...(latestPaneSnapshotRef.current ?? {}),
+        reason: "unmount",
+      });
+    };
+  }, [paneId]);
+
+  useEffect(() => {
+    logDiagnostics("PaneView", "state-change", createPaneDiagnosticsSnapshot("state-change"));
+  }, [createPaneDiagnosticsSnapshot]);
+
   const handleSubmit = useCallback(
     (command: string) => {
       selectBlock(null);
+      logDiagnostics("PaneView", "submit", {
+        ...createPaneDiagnosticsSnapshot("submit"),
+        commandPreview: command.slice(0, 120),
+      });
       sendInput(command);
     },
-    [sendInput, selectBlock]
+    [createPaneDiagnosticsSnapshot, sendInput, selectBlock]
   );
 
   // Toggle search overlay
@@ -222,7 +276,8 @@ export function PaneView({
             onData={sendInput}
             onResize={resizePty}
             onReady={notifyFullscreenReady}
-            rawOutput={rawOutput}
+            getRawOutputSnapshot={getRawOutputSnapshot}
+            subscribeToRawOutput={subscribeToRawOutput}
             interactiveCommandKind={interactiveCommandKind}
           />
         </div>

@@ -2,7 +2,11 @@ import { useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { getRootDiagnosticsSnapshot, logDiagnostics } from "../utils/diagnostics";
 import "@xterm/xterm/css/xterm.css";
+
+const FULLSCREEN_SCROLLBACK_LINES = 1000;
+const FULLSCREEN_WRITE_FLUSH_MS = 16;
 
 interface XtermCoreLike {
   _bufferService?: XtermBufferServiceLike;
@@ -348,10 +352,13 @@ interface FullscreenTerminalProps {
   visible: boolean;
   isFocused: boolean;
   startOffset: number;
+  rawOutputBaseOffset?: number;
+  getRawOutputSnapshot?: () => { rawOutput: string; rawOutputBaseOffset: number };
   onData: (data: string) => void;
   onResize: (cols: number, rows: number) => void;
   onReady: (cols: number, rows: number) => void;
-  rawOutput: string;
+  rawOutput?: string;
+  subscribeToRawOutput?: (listener: () => void) => () => void;
   interactiveCommandKind?: "claude" | "copilot" | null;
 }
 
@@ -360,10 +367,13 @@ export function FullscreenTerminal({
   visible,
   isFocused,
   startOffset,
+  rawOutputBaseOffset = 0,
+  getRawOutputSnapshot,
   onData,
   onResize,
   onReady,
-  rawOutput,
+  rawOutput = "",
+  subscribeToRawOutput,
   interactiveCommandKind = null,
 }: FullscreenTerminalProps) {
   const claudeRetryBudget = 24;
@@ -374,11 +384,20 @@ export function FullscreenTerminal({
   const isHydratedRef = useRef(false);
   const isFocusedRef = useRef(isFocused);
   const rawOutputRef = useRef(rawOutput);
+  const rawOutputBaseOffsetRef = useRef(rawOutputBaseOffset);
+  const latestTerminalSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const pendingWriteBufferRef = useRef("");
+  const writeFlushTimeoutRef = useRef<number | null>(null);
   const pendingProbeRef = useRef<{ setAnchor: boolean; buffer: string } | null>(null);
   const pointerDownRef = useRef<{ x: number; y: number } | null>(null);
   const claudeRetryTimeoutRef = useRef<number | null>(null);
   const activationFrameRef = useRef<number | null>(null);
   const isComposingRef = useRef(false);
+  const writeDiagnosticsRef = useRef({
+    bytes: 0,
+    chunks: 0,
+    lastLoggedAt: 0,
+  });
   const textareaListenersRef = useRef<{
     textarea: HTMLTextAreaElement;
     compositionstartHandler: () => void;
@@ -387,9 +406,117 @@ export function FullscreenTerminal({
   } | null>(null);
   const recentXtermDataRef = useRef<string[]>([]);
 
+  const createTerminalDiagnosticsSnapshot = useCallback(
+    (reason: string) => ({
+      reason,
+      sessionId,
+      visible,
+      isFocused: isFocusedRef.current,
+      startOffset,
+      rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
+      rawOutputLength: rawOutputRef.current.length,
+      lastWritten: lastWrittenRef.current,
+      isHydrated: isHydratedRef.current,
+      terminalCols: terminalRef.current?.cols ?? null,
+      terminalRows: terminalRef.current?.rows ?? null,
+      containerWidth: containerRef.current?.clientWidth ?? null,
+      containerHeight: containerRef.current?.clientHeight ?? null,
+      interactiveCommandKind,
+      ...getRootDiagnosticsSnapshot(),
+    }),
+    [interactiveCommandKind, sessionId, startOffset, visible]
+  );
+
+  const readRawOutputSnapshot = useCallback(
+    () =>
+      getRawOutputSnapshot
+        ? getRawOutputSnapshot()
+        : {
+            rawOutput,
+            rawOutputBaseOffset,
+          },
+    [getRawOutputSnapshot, rawOutput, rawOutputBaseOffset]
+  );
+
+  useEffect(() => {
+    latestTerminalSnapshotRef.current = createTerminalDiagnosticsSnapshot("latest");
+  }, [createTerminalDiagnosticsSnapshot]);
+
+  const flushWriteDiagnostics = useCallback(
+    (reason: string, force = false) => {
+      const stats = writeDiagnosticsRef.current;
+      if (stats.chunks === 0) {
+        return;
+      }
+
+      const now = Date.now();
+      const shouldLog = force || stats.bytes >= 128 * 1024 || now - stats.lastLoggedAt >= 1000;
+      if (!shouldLog) {
+        return;
+      }
+
+      logDiagnostics("FullscreenTerminal", "write-burst", {
+        ...createTerminalDiagnosticsSnapshot(reason),
+        chunkCount: stats.chunks,
+        totalBytes: stats.bytes,
+      });
+      stats.bytes = 0;
+      stats.chunks = 0;
+      stats.lastLoggedAt = now;
+    },
+    [createTerminalDiagnosticsSnapshot]
+  );
+
+  const recordTerminalWrite = useCallback(
+    (byteLength: number, reason: string) => {
+      const stats = writeDiagnosticsRef.current;
+      stats.bytes += byteLength;
+      stats.chunks += 1;
+      flushWriteDiagnostics(reason);
+    },
+    [flushWriteDiagnostics]
+  );
+
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
   }, []);
+
+  const flushPendingWrites = useCallback(
+    (reason: "scheduled-flush" | "deactivate" | "unmount") => {
+      if (writeFlushTimeoutRef.current !== null) {
+        window.clearTimeout(writeFlushTimeoutRef.current);
+        writeFlushTimeoutRef.current = null;
+      }
+
+      if (!terminalRef.current || pendingWriteBufferRef.current.length === 0) {
+        return;
+      }
+
+      const pending = pendingWriteBufferRef.current;
+      pendingWriteBufferRef.current = "";
+      terminalRef.current.write(pending);
+      recordTerminalWrite(pending.length, reason);
+    },
+    [recordTerminalWrite]
+  );
+
+  const enqueueTerminalWrite = useCallback(
+    (data: string) => {
+      if (data.length === 0) {
+        return;
+      }
+
+      pendingWriteBufferRef.current += data;
+      if (writeFlushTimeoutRef.current !== null) {
+        return;
+      }
+
+      writeFlushTimeoutRef.current = window.setTimeout(() => {
+        flushPendingWrites("scheduled-flush");
+      }, FULLSCREEN_WRITE_FLUSH_MS);
+    },
+    [flushPendingWrites]
+  );
 
   const clearActivationFrame = useCallback(() => {
     if (activationFrameRef.current !== null) {
@@ -571,8 +698,30 @@ export function FullscreenTerminal({
   }, [isFocused]);
 
   useEffect(() => {
-    rawOutputRef.current = rawOutput;
-  }, [rawOutput]);
+    const snapshot = readRawOutputSnapshot();
+    rawOutputRef.current = snapshot.rawOutput;
+    rawOutputBaseOffsetRef.current = snapshot.rawOutputBaseOffset;
+  }, [readRawOutputSnapshot]);
+
+  useEffect(() => {
+    logDiagnostics("FullscreenTerminal", "mount", createTerminalDiagnosticsSnapshot("mount"));
+
+    return () => {
+      flushWriteDiagnostics("unmount", true);
+      logDiagnostics("FullscreenTerminal", "unmount", {
+        ...(latestTerminalSnapshotRef.current ?? {}),
+        reason: "unmount",
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    logDiagnostics(
+      "FullscreenTerminal",
+      "state-change",
+      createTerminalDiagnosticsSnapshot("state-change")
+    );
+  }, [createTerminalDiagnosticsSnapshot]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -585,6 +734,7 @@ export function FullscreenTerminal({
         foreground: "#d4d4d4",
         cursor: "#d4d4d4",
       },
+      scrollback: FULLSCREEN_SCROLLBACK_LINES,
       altClickMovesCursor: false,
       cursorBlink: true,
     });
@@ -715,6 +865,7 @@ export function FullscreenTerminal({
     containerRef.current.addEventListener("mousedown", handleTerminalMouseDown, true);
 
     return () => {
+      flushPendingWrites("unmount");
       clearClaudeRetryTimeout();
       pendingProbeRef.current = null;
       clearActivationFrame();
@@ -739,6 +890,7 @@ export function FullscreenTerminal({
   }, [
     clearActivationFrame,
     clearClaudeRetryTimeout,
+    flushPendingWrites,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
     requestCursorProbe,
@@ -747,6 +899,11 @@ export function FullscreenTerminal({
 
   useEffect(() => {
     if (visible && fitAddonRef.current) {
+      logDiagnostics(
+        "FullscreenTerminal",
+        "activation-start",
+        createTerminalDiagnosticsSnapshot("activation-start")
+      );
       clearActivationFrame();
       clearClaudeRetryTimeout();
       isHydratedRef.current = false;
@@ -760,6 +917,10 @@ export function FullscreenTerminal({
         }
 
         if ((container.clientWidth <= 0 || container.clientHeight <= 0) && attemptsRemaining > 0) {
+          logDiagnostics("FullscreenTerminal", "activation-waiting-size", {
+            ...createTerminalDiagnosticsSnapshot("activation-waiting-size"),
+            attemptsRemaining,
+          });
           activationFrameRef.current = window.requestAnimationFrame(() =>
             activateWhenSized(attemptsRemaining - 1)
           );
@@ -768,12 +929,30 @@ export function FullscreenTerminal({
 
         activationFrameRef.current = null;
         fitTerminal();
-        const initialData = rawOutputRef.current.slice(startOffset);
+        const bufferBaseOffset = rawOutputBaseOffsetRef.current;
+        const relativeStart = Math.max(0, startOffset - bufferBaseOffset);
+        if (startOffset < bufferBaseOffset) {
+          console.warn("[tome] Fullscreen hydration replay was truncated", {
+            startOffset,
+            rawOutputBaseOffset: bufferBaseOffset,
+            retainedLength: rawOutputRef.current.length,
+          });
+          logDiagnostics("FullscreenTerminal", "hydration-truncated", {
+            ...createTerminalDiagnosticsSnapshot("hydration-truncated"),
+            retainedLength: rawOutputRef.current.length,
+          });
+        }
+        const initialData = rawOutputRef.current.slice(relativeStart);
         if (initialData.length > 0) {
           terminalRef.current.write(initialData);
+          recordTerminalWrite(initialData.length, "hydration-write");
         }
-        lastWrittenRef.current = rawOutputRef.current.length;
+        lastWrittenRef.current = bufferBaseOffset + rawOutputRef.current.length;
         isHydratedRef.current = true;
+        logDiagnostics("FullscreenTerminal", "activation-complete", {
+          ...createTerminalDiagnosticsSnapshot("activation-complete"),
+          initialDataLength: initialData.length,
+        });
         onReady(terminalRef.current.cols, terminalRef.current.rows);
         if (isFocusedRef.current) {
           focusTerminal(true);
@@ -788,42 +967,74 @@ export function FullscreenTerminal({
     } else if (sessionId) {
       clearActivationFrame();
       clearClaudeRetryTimeout();
+      flushPendingWrites("deactivate");
       isHydratedRef.current = false;
+      flushWriteDiagnostics("deactivate", true);
+      logDiagnostics(
+        "FullscreenTerminal",
+        "activation-end",
+        createTerminalDiagnosticsSnapshot("activation-end")
+      );
       void invoke("clear_interactive_input_anchor", { sessionId });
     }
   }, [
     clearActivationFrame,
     clearClaudeRetryTimeout,
+    createTerminalDiagnosticsSnapshot,
     fitTerminal,
+    flushPendingWrites,
+    flushWriteDiagnostics,
     onReady,
+    recordTerminalWrite,
     sessionId,
     startOffset,
     focusTerminal,
     visible,
   ]);
 
-  useEffect(() => {
+  const processLatestRawOutput = useCallback(() => {
+    const snapshot = readRawOutputSnapshot();
+    rawOutputRef.current = snapshot.rawOutput;
+    rawOutputBaseOffsetRef.current = snapshot.rawOutputBaseOffset;
+    const absoluteEndOffset = snapshot.rawOutputBaseOffset + snapshot.rawOutput.length;
+
     if (
       visible &&
       isHydratedRef.current &&
       terminalRef.current &&
-      rawOutput.length > lastWrittenRef.current
+      absoluteEndOffset > lastWrittenRef.current
     ) {
-      const newData = rawOutput.slice(lastWrittenRef.current);
-      terminalRef.current.write(newData);
-      lastWrittenRef.current = rawOutput.length;
+      const relativeWriteStart = Math.max(0, lastWrittenRef.current - snapshot.rawOutputBaseOffset);
+      const newData = snapshot.rawOutput.slice(relativeWriteStart);
+      lastWrittenRef.current = absoluteEndOffset;
+      enqueueTerminalWrite(newData);
     }
-  }, [visible, rawOutput]);
+  }, [enqueueTerminalWrite, readRawOutputSnapshot, visible]);
+
+  useEffect(() => {
+    if (subscribeToRawOutput) {
+      return subscribeToRawOutput(() => {
+        processLatestRawOutput();
+      });
+    }
+
+    processLatestRawOutput();
+  }, [processLatestRawOutput, subscribeToRawOutput]);
 
   useEffect(() => {
     const handleResize = () => {
       if (visible && fitAddonRef.current) {
+        logDiagnostics(
+          "FullscreenTerminal",
+          "window-resize",
+          createTerminalDiagnosticsSnapshot("window-resize")
+        );
         fitTerminal();
       }
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [fitTerminal, visible]);
+  }, [createTerminalDiagnosticsSnapshot, fitTerminal, visible]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -836,6 +1047,11 @@ export function FullscreenTerminal({
         return;
       }
 
+      logDiagnostics(
+        "FullscreenTerminal",
+        "resize-observer",
+        createTerminalDiagnosticsSnapshot("resize-observer")
+      );
       fitTerminal();
       void reportTerminalCursor(false);
     });
@@ -845,7 +1061,7 @@ export function FullscreenTerminal({
     return () => {
       observer.disconnect();
     };
-  }, [fitTerminal, reportTerminalCursor, visible]);
+  }, [createTerminalDiagnosticsSnapshot, fitTerminal, reportTerminalCursor, visible]);
 
   useEffect(() => {
     if (!sessionId || !visible) {

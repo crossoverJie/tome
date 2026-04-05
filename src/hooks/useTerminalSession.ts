@@ -11,6 +11,13 @@ import {
   updateSessionState,
 } from "./sessionState";
 import type { CompletionResponse } from "../types/completion";
+import { logDiagnostics } from "../utils/diagnostics";
+import {
+  appendRawOutputChunk,
+  FULLSCREEN_REPLAY_BUFFER_LIMIT,
+  FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET,
+  getRawOutputAbsoluteEnd,
+} from "../utils/rawOutputBuffer";
 
 export interface Block {
   id: string;
@@ -44,6 +51,10 @@ function isEnvAssignment(token: string): boolean {
 }
 
 type InteractiveCommandKind = "claude" | "copilot";
+interface RawOutputSnapshot {
+  rawOutput: string;
+  rawOutputBaseOffset: number;
+}
 
 function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | null {
   const tokens = tokenizeCommand(command.trim());
@@ -103,7 +114,10 @@ interface UseTerminalSessionReturn {
   interactiveCommandKind: InteractiveCommandKind | null;
   isFullscreenTerminalActive: boolean;
   fullscreenOutputStart: number;
+  rawOutputBaseOffset: number;
   rawOutput: string;
+  getRawOutputSnapshot: () => RawOutputSnapshot;
+  subscribeToRawOutput: (listener: () => void) => () => void;
   currentDirectory: string | null;
   gitBranch: string | null;
   sendInput: (data: string) => void;
@@ -128,6 +142,10 @@ interface UseTerminalSessionReturn {
 }
 
 const INITIAL_INPUT_READY_FALLBACK_MS = 150;
+const FULLSCREEN_REPLAY_BUFFER_BUDGET = {
+  limit: FULLSCREEN_REPLAY_BUFFER_LIMIT,
+  trimTarget: FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET,
+};
 
 export function useTerminalSession(
   paneId?: string,
@@ -158,6 +176,9 @@ export function useTerminalSession(
   const [fullscreenOutputStart, setFullscreenOutputStart] = useState(
     persistedState?.fullscreenOutputStart || 0
   );
+  const [rawOutputBaseOffset, setRawOutputBaseOffset] = useState(
+    persistedState?.rawOutputBaseOffset || 0
+  );
   const [rawOutput, setRawOutput] = useState(persistedState?.rawOutput || "");
   const [currentDirectory, setCurrentDirectory] = useState<string | null>(
     persistedState?.currentDirectory || null
@@ -169,11 +190,29 @@ export function useTerminalSession(
   const pendingCommandRef = useRef("");
   const pendingClaudeLaunchRef = useRef<string | null>(null);
   const interactiveCommandRef = useRef(persistedState?.isInteractiveCommandActive || false);
+  const interactiveCommandKindRef = useRef<InteractiveCommandKind | null>(
+    persistedState?.interactiveCommandKind || null
+  );
+  const fullscreenOutputStartRef = useRef(persistedState?.fullscreenOutputStart || 0);
   const rawOutputRef = useRef(persistedState?.rawOutput || "");
+  const rawOutputBaseOffsetRef = useRef(persistedState?.rawOutputBaseOffset || 0);
+  const rawOutputListenersRef = useRef(new Set<() => void>());
+  const latestSessionSnapshotRef = useRef<Record<string, unknown> | null>(null);
+  const lastTrimLogBaseOffsetRef = useRef(-1);
+  const rawOutputDiagnosticsRef = useRef({
+    bytes: 0,
+    chunks: 0,
+    lastLoggedAt: 0,
+  });
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
+  const blockCountRef = useRef(persistedState?.blocks?.length || 0);
   const isAlternateScreenRef = useRef(persistedState?.isAlternateScreen || false);
   const inputReadyFallbackRef = useRef<number | null>(null);
+  const currentDirectoryRef = useRef(persistedState?.currentDirectory || null);
+  const gitBranchRef = useRef(persistedState?.gitBranch || null);
   const isFullscreenTerminalActive = isAlternateScreen || isInteractiveCommandActive;
+  const isFullscreenTerminalActiveRef = useRef(isFullscreenTerminalActive);
+  isFullscreenTerminalActiveRef.current = isFullscreenTerminalActive;
 
   // Search state
   const [searchQuery, setSearchQueryState] = useState("");
@@ -189,9 +228,14 @@ export function useTerminalSession(
         isInteractiveCommandActive,
         interactiveCommandKind,
         fullscreenOutputStart,
-        rawOutput,
         currentDirectory,
         gitBranch,
+        ...(!isFullscreenTerminalActive
+          ? {
+              rawOutputBaseOffset,
+              rawOutput,
+            }
+          : {}),
       });
     }
   }, [
@@ -201,14 +245,200 @@ export function useTerminalSession(
     isInteractiveCommandActive,
     interactiveCommandKind,
     fullscreenOutputStart,
+    isFullscreenTerminalActive,
+    rawOutputBaseOffset,
     rawOutput,
     currentDirectory,
     gitBranch,
   ]);
 
   useEffect(() => {
+    fullscreenOutputStartRef.current = fullscreenOutputStart;
+  }, [fullscreenOutputStart]);
+
+  useEffect(() => {
+    interactiveCommandKindRef.current = interactiveCommandKind;
+  }, [interactiveCommandKind]);
+
+  useEffect(() => {
+    rawOutputBaseOffsetRef.current = rawOutputBaseOffset;
+  }, [rawOutputBaseOffset]);
+
+  useEffect(() => {
     rawOutputRef.current = rawOutput;
   }, [rawOutput]);
+
+  useEffect(() => {
+    blockCountRef.current = blocks.length;
+  }, [blocks.length]);
+
+  useEffect(() => {
+    currentDirectoryRef.current = currentDirectory;
+  }, [currentDirectory]);
+
+  useEffect(() => {
+    gitBranchRef.current = gitBranch;
+  }, [gitBranch]);
+
+  const getRawOutputEndOffset = useCallback(
+    () =>
+      getRawOutputAbsoluteEnd({
+        rawOutput: rawOutputRef.current,
+        rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
+      }),
+    []
+  );
+
+  const getRawOutputSnapshot = useCallback(
+    (): RawOutputSnapshot => ({
+      rawOutput: rawOutputRef.current,
+      rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
+    }),
+    []
+  );
+
+  const subscribeToRawOutput = useCallback((listener: () => void) => {
+    rawOutputListenersRef.current.add(listener);
+    return () => {
+      rawOutputListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const createSessionDiagnosticsSnapshot = useCallback(
+    (reason: string) => ({
+      reason,
+      paneId: paneId ?? null,
+      sessionId,
+      phase: phaseRef.current,
+      isAlternateScreen: isAlternateScreenRef.current,
+      isInteractiveCommandActive: interactiveCommandRef.current,
+      interactiveCommandKind: interactiveCommandKindRef.current,
+      rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
+      rawOutputLength: rawOutputRef.current.length,
+      fullscreenOutputStart: fullscreenOutputStartRef.current,
+      blockCount: blockCountRef.current,
+      currentDirectory: currentDirectoryRef.current,
+      gitBranch: gitBranchRef.current,
+    }),
+    [paneId, sessionId]
+  );
+
+  const publishRawOutputState = useCallback(() => {
+    const nextRawOutput = rawOutputRef.current;
+    const nextRawOutputBaseOffset = rawOutputBaseOffsetRef.current;
+
+    setRawOutput((prev) => (prev === nextRawOutput ? prev : nextRawOutput));
+    setRawOutputBaseOffset((prev) =>
+      prev === nextRawOutputBaseOffset ? prev : nextRawOutputBaseOffset
+    );
+  }, []);
+
+  const scheduleRawOutputPublish = useCallback(
+    (force = false) => {
+      if (force || !isFullscreenTerminalActiveRef.current) {
+        publishRawOutputState();
+      }
+    },
+    [publishRawOutputState]
+  );
+
+  useEffect(() => {
+    latestSessionSnapshotRef.current = createSessionDiagnosticsSnapshot("latest");
+  }, [createSessionDiagnosticsSnapshot]);
+
+  const flushRawOutputDiagnostics = useCallback(
+    (reason: string, force = false) => {
+      const stats = rawOutputDiagnosticsRef.current;
+      if (stats.chunks === 0) {
+        return;
+      }
+
+      const now = Date.now();
+      const shouldLog = force || stats.bytes >= 128 * 1024 || now - stats.lastLoggedAt >= 1000;
+      if (!shouldLog) {
+        return;
+      }
+
+      logDiagnostics("useTerminalSession", "raw-output-burst", {
+        ...createSessionDiagnosticsSnapshot(reason),
+        chunkCount: stats.chunks,
+        totalBytes: stats.bytes,
+      });
+      stats.bytes = 0;
+      stats.chunks = 0;
+      stats.lastLoggedAt = now;
+    },
+    [createSessionDiagnosticsSnapshot]
+  );
+
+  const appendRawOutput = useCallback(
+    (data: string) => {
+      const stats = rawOutputDiagnosticsRef.current;
+      stats.bytes += data.length;
+      stats.chunks += 1;
+
+      const previousBaseOffset = rawOutputBaseOffsetRef.current;
+      const next = appendRawOutputChunk(
+        {
+          rawOutput: rawOutputRef.current,
+          rawOutputBaseOffset: previousBaseOffset,
+        },
+        data,
+        isFullscreenTerminalActiveRef.current ? FULLSCREEN_REPLAY_BUFFER_BUDGET : undefined
+      );
+
+      rawOutputRef.current = next.rawOutput;
+      rawOutputBaseOffsetRef.current = next.rawOutputBaseOffset;
+      rawOutputListenersRef.current.forEach((listener) => {
+        listener();
+      });
+
+      if (next.didTrim) {
+        const shouldLogTrim =
+          lastTrimLogBaseOffsetRef.current < 0 ||
+          next.rawOutputBaseOffset - lastTrimLogBaseOffsetRef.current >= 128 * 1024;
+        if (shouldLogTrim) {
+          lastTrimLogBaseOffsetRef.current = next.rawOutputBaseOffset;
+          console.warn("[tome] Trimmed fullscreen raw output buffer", {
+            trimmedCharCount: next.trimmedCharCount,
+            rawOutputBaseOffset: next.rawOutputBaseOffset,
+            fullscreenOutputStart: fullscreenOutputStartRef.current,
+            rawOutputLength: next.rawOutput.length,
+          });
+          logDiagnostics("useTerminalSession", "raw-output-trimmed", {
+            ...createSessionDiagnosticsSnapshot("raw-output-trimmed"),
+            trimmedCharCount: next.trimmedCharCount,
+            rawOutputBaseOffset: next.rawOutputBaseOffset,
+            rawOutputLength: next.rawOutput.length,
+          });
+        }
+      }
+
+      scheduleRawOutputPublish();
+      flushRawOutputDiagnostics("raw-output-burst");
+    },
+    [createSessionDiagnosticsSnapshot, flushRawOutputDiagnostics, scheduleRawOutputPublish]
+  );
+
+  useEffect(() => {
+    logDiagnostics("useTerminalSession", "mount", createSessionDiagnosticsSnapshot("mount"));
+
+    return () => {
+      flushRawOutputDiagnostics("unmount", true);
+      logDiagnostics("useTerminalSession", "unmount", {
+        ...(latestSessionSnapshotRef.current ?? {}),
+        reason: "unmount",
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    logDiagnostics(
+      "useTerminalSession",
+      "state-change",
+      createSessionDiagnosticsSnapshot("state-change")
+    );
+  }, [createSessionDiagnosticsSnapshot]);
 
   useEffect(() => {
     // Prevent double initialization
@@ -233,6 +463,11 @@ export function useTerminalSession(
 
     async function init() {
       try {
+        logDiagnostics(
+          "useTerminalSession",
+          "init-start",
+          createSessionDiagnosticsSnapshot("init-start")
+        );
         // Determine the session ID to use
         let sid: string;
 
@@ -261,6 +496,7 @@ export function useTerminalSession(
             isInteractiveCommandActive: false,
             interactiveCommandKind: null,
             fullscreenOutputStart: 0,
+            rawOutputBaseOffset: 0,
             rawOutput: "",
             currentDirectory: null,
             gitBranch: null,
@@ -277,7 +513,7 @@ export function useTerminalSession(
 
           switch (payload.kind) {
             case "raw_output":
-              setRawOutput((prev) => prev + payload.data);
+              appendRawOutput(payload.data);
               break;
             case "output": {
               const data = payload.data;
@@ -332,7 +568,7 @@ export function useTerminalSession(
                   }
                   setInteractiveCommandKind(nextInteractiveCommandKind);
                   if (interactiveCommandActive) {
-                    setFullscreenOutputStart(rawOutputRef.current.length);
+                    setFullscreenOutputStart(getRawOutputEndOffset());
                   }
                   pendingClaudeLaunchRef.current = null;
                   pendingCommandRef.current = "";
@@ -350,15 +586,22 @@ export function useTerminalSession(
                       isCollapsed: false,
                     },
                   ]);
+                  logDiagnostics("useTerminalSession", "command-start", {
+                    ...createSessionDiagnosticsSnapshot("command-start"),
+                    command: cmd,
+                    interactiveCommandActive,
+                    interactiveCommandKind: nextInteractiveCommandKind,
+                  });
                   break;
                 }
                 case "command_end":
                   phaseRef.current = "idle";
                   interactiveCommandRef.current = false;
                   pendingClaudeLaunchRef.current = null;
+                  scheduleRawOutputPublish(true);
                   setIsInteractiveCommandActive(false);
                   setInteractiveCommandKind(null);
-                  setFullscreenOutputStart(rawOutputRef.current.length);
+                  setFullscreenOutputStart(getRawOutputEndOffset());
                   setBlocks((prev) => {
                     if (prev.length === 0) return prev;
                     const updated = [...prev];
@@ -369,6 +612,11 @@ export function useTerminalSession(
                     updated[updated.length - 1] = last;
                     return updated;
                   });
+                  flushRawOutputDiagnostics("command-end", true);
+                  logDiagnostics("useTerminalSession", "command-end", {
+                    ...createSessionDiagnosticsSnapshot("command-end"),
+                    exitCode: exit_code,
+                  });
                   break;
               }
               break;
@@ -376,10 +624,16 @@ export function useTerminalSession(
 
             case "alternate_screen":
               if (payload.active) {
-                setFullscreenOutputStart(rawOutputRef.current.length);
+                setFullscreenOutputStart(getRawOutputEndOffset());
+              } else {
+                scheduleRawOutputPublish(true);
               }
               isAlternateScreenRef.current = payload.active;
               setIsAlternateScreen(payload.active);
+              logDiagnostics("useTerminalSession", "alternate-screen", {
+                ...createSessionDiagnosticsSnapshot("alternate-screen"),
+                active: payload.active,
+              });
               // When exiting alternate screen, clear the current block's output
               // to avoid showing vim's control sequences
               if (!payload.active && phaseRef.current === "running") {
@@ -414,10 +668,19 @@ export function useTerminalSession(
 
         const cwd = await invoke<string>("get_current_directory", { sessionId: sid });
         setCurrentDirectory(cwd);
+        logDiagnostics("useTerminalSession", "init-complete", {
+          ...createSessionDiagnosticsSnapshot("init-complete"),
+          sessionId: sid,
+          currentDirectory: cwd,
+        });
       } catch (error) {
         clearInputReadyFallback();
         hasInitialized.current = false;
         console.error("Failed to initialize terminal session", error);
+        logDiagnostics("useTerminalSession", "init-error", {
+          ...createSessionDiagnosticsSnapshot("init-error"),
+          error: error instanceof Error ? error : null,
+        });
       }
     }
 
@@ -436,11 +699,15 @@ export function useTerminalSession(
         const cmd = data.slice(0, -1).trim();
         if (cmd) {
           pendingCommandRef.current = cmd;
+          logDiagnostics("useTerminalSession", "send-input-command", {
+            ...createSessionDiagnosticsSnapshot("send-input-command"),
+            command: cmd,
+          });
           if (getInteractiveAiCommandKind(cmd)) {
             interactiveCommandRef.current = true;
             setIsInteractiveCommandActive(true);
             setInteractiveCommandKind(getInteractiveAiCommandKind(cmd));
-            setFullscreenOutputStart(rawOutputRef.current.length);
+            setFullscreenOutputStart(getRawOutputEndOffset());
             pendingClaudeLaunchRef.current = data;
             return;
           }
@@ -451,7 +718,7 @@ export function useTerminalSession(
       }
       invoke("write_input", { sessionId, data });
     },
-    [isInputReady, sessionId]
+    [getRawOutputEndOffset, isInputReady, sessionId]
   );
 
   const notifyFullscreenReady = useCallback(
@@ -617,7 +884,10 @@ export function useTerminalSession(
     interactiveCommandKind,
     isFullscreenTerminalActive,
     fullscreenOutputStart,
+    rawOutputBaseOffset,
     rawOutput,
+    getRawOutputSnapshot,
+    subscribeToRawOutput,
     currentDirectory,
     gitBranch,
     sendInput,

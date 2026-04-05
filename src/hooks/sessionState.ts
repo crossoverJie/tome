@@ -7,6 +7,7 @@ interface SessionState {
   isInteractiveCommandActive: boolean;
   interactiveCommandKind: "claude" | "copilot" | null;
   fullscreenOutputStart: number;
+  rawOutputBaseOffset: number;
   rawOutput: string;
   currentDirectory: string | null;
   gitBranch: string | null;
