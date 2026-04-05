@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.weather.com)",
+      "WebFetch(domain:openweathermap.org)",
+      "WebFetch(domain:wttr.in)",
+      "WebFetch(domain:tianqi.eastday.com)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(command -v zbarimg)",
+      "Bash(zbarimg -q --raw /tmp/xhs_qr.png)",
+      "Bash(command -v qrdecode)",
+      "Bash(qrdecode /tmp/xhs_qr.png)",
+      "Bash(python3:*)",
+      "Bash(jq -r .[0].symbol[0].data)"
+    ]
+  }
+}
