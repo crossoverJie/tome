@@ -7,6 +7,7 @@ import {
   setSessionState,
   updateSessionState,
 } from "./sessionState";
+import { createFullscreenSessionState } from "../utils/fullscreenSessionState";
 
 describe("sessionState pane init options", () => {
   it("consumes pane session init options once", () => {
@@ -28,6 +29,7 @@ describe("sessionState pane init options", () => {
       isInteractiveCommandActive: false,
       interactiveCommandKind: null,
       fullscreenOutputStart: 0,
+      fullscreenSession: createFullscreenSessionState(),
       rawOutputBaseOffset: 0,
       rawOutput: "",
       currentDirectory: null,
@@ -38,10 +40,18 @@ describe("sessionState pane init options", () => {
       isInteractiveCommandActive: true,
       interactiveCommandKind: "claude",
       fullscreenOutputStart: 42,
+      fullscreenSession: {
+        ...createFullscreenSessionState(),
+        mode: "interactive",
+        lifecycle: "active",
+        commandKind: "claude",
+        startOffset: 42,
+      },
     });
 
     expect(getSessionState("session-1")?.isInteractiveCommandActive).toBe(true);
     expect(getSessionState("session-1")?.interactiveCommandKind).toBe("claude");
     expect(getSessionState("session-1")?.fullscreenOutputStart).toBe(42);
+    expect(getSessionState("session-1")?.fullscreenSession.mode).toBe("interactive");
   });
 });

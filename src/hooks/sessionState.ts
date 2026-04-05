@@ -1,4 +1,5 @@
 import type { Block } from "./useTerminalSession";
+import type { FullscreenSessionState } from "../utils/fullscreenSessionState";
 
 interface SessionState {
   sessionId: string;
@@ -7,11 +8,14 @@ interface SessionState {
   isInteractiveCommandActive: boolean;
   interactiveCommandKind: "claude" | "copilot" | null;
   fullscreenOutputStart: number;
+  fullscreenSession: FullscreenSessionState;
   rawOutputBaseOffset: number;
   rawOutput: string;
   currentDirectory: string | null;
   gitBranch: string | null;
 }
+
+export type { SessionState };
 
 export interface PaneSessionInitOptions {
   initialCwd?: string;

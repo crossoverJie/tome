@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { PaneView } from "./PaneView";
+import { createFullscreenSessionState } from "../utils/fullscreenSessionState";
 
 const useTerminalSessionMock = vi.fn();
 
@@ -36,6 +37,7 @@ function buildHookState() {
     interactiveCommandKind: null,
     isFullscreenTerminalActive: false,
     fullscreenOutputStart: 0,
+    fullscreenSession: createFullscreenSessionState(),
     rawOutputBaseOffset: 0,
     rawOutput: "",
     getRawOutputSnapshot: vi.fn(() => ({ rawOutput: "", rawOutputBaseOffset: 0 })),

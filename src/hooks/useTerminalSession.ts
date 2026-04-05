@@ -13,6 +13,14 @@ import {
 import type { CompletionResponse } from "../types/completion";
 import { logDiagnostics } from "../utils/diagnostics";
 import {
+  createFullscreenSessionState,
+  fullscreenSessionReducer,
+  isFullscreenSessionActive,
+  type FullscreenSessionEvent,
+  type FullscreenSessionState,
+  type InteractiveCommandKind,
+} from "../utils/fullscreenSessionState";
+import {
   appendRawOutputChunk,
   FULLSCREEN_REPLAY_BUFFER_LIMIT,
   FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET,
@@ -49,8 +57,6 @@ function tokenizeCommand(command: string): string[] {
 function isEnvAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token);
 }
-
-type InteractiveCommandKind = "claude" | "copilot";
 interface RawOutputSnapshot {
   rawOutput: string;
   rawOutputBaseOffset: number;
@@ -114,6 +120,7 @@ interface UseTerminalSessionReturn {
   interactiveCommandKind: InteractiveCommandKind | null;
   isFullscreenTerminalActive: boolean;
   fullscreenOutputStart: number;
+  fullscreenSession: FullscreenSessionState;
   rawOutputBaseOffset: number;
   rawOutput: string;
   getRawOutputSnapshot: () => RawOutputSnapshot;
@@ -165,16 +172,21 @@ export function useTerminalSession(
 
   const [blocks, setBlocks] = useState<Block[]>(persistedState?.blocks || []);
   const [isInputReady, setIsInputReady] = useState(false);
-  const [isAlternateScreen, setIsAlternateScreen] = useState(
-    persistedState?.isAlternateScreen || false
-  );
-  const [isInteractiveCommandActive, setIsInteractiveCommandActive] = useState(
-    persistedState?.isInteractiveCommandActive || false
-  );
-  const [interactiveCommandKind, setInteractiveCommandKind] =
-    useState<InteractiveCommandKind | null>(persistedState?.interactiveCommandKind || null);
-  const [fullscreenOutputStart, setFullscreenOutputStart] = useState(
-    persistedState?.fullscreenOutputStart || 0
+  const [fullscreenSession, setFullscreenSession] = useState<FullscreenSessionState>(
+    persistedState?.fullscreenSession ?? {
+      ...createFullscreenSessionState(),
+      commandKind: persistedState?.interactiveCommandKind ?? null,
+      startOffset: persistedState?.fullscreenOutputStart || 0,
+      mode: persistedState?.isAlternateScreen
+        ? "alternate"
+        : persistedState?.isInteractiveCommandActive
+          ? "interactive"
+          : null,
+      lifecycle:
+        persistedState?.isAlternateScreen || persistedState?.isInteractiveCommandActive
+          ? "active"
+          : "inactive",
+    }
   );
   const [rawOutputBaseOffset, setRawOutputBaseOffset] = useState(
     persistedState?.rawOutputBaseOffset || 0
@@ -189,11 +201,7 @@ export function useTerminalSession(
   const currentCommandRef = useRef("");
   const pendingCommandRef = useRef("");
   const pendingClaudeLaunchRef = useRef<string | null>(null);
-  const interactiveCommandRef = useRef(persistedState?.isInteractiveCommandActive || false);
-  const interactiveCommandKindRef = useRef<InteractiveCommandKind | null>(
-    persistedState?.interactiveCommandKind || null
-  );
-  const fullscreenOutputStartRef = useRef(persistedState?.fullscreenOutputStart || 0);
+  const fullscreenSessionRef = useRef(fullscreenSession);
   const rawOutputRef = useRef(persistedState?.rawOutput || "");
   const rawOutputBaseOffsetRef = useRef(persistedState?.rawOutputBaseOffset || 0);
   const rawOutputListenersRef = useRef(new Set<() => void>());
@@ -206,11 +214,15 @@ export function useTerminalSession(
   });
   const blockIdCounter = useRef(persistedState?.blocks?.length || 0);
   const blockCountRef = useRef(persistedState?.blocks?.length || 0);
-  const isAlternateScreenRef = useRef(persistedState?.isAlternateScreen || false);
   const inputReadyFallbackRef = useRef<number | null>(null);
   const currentDirectoryRef = useRef(persistedState?.currentDirectory || null);
   const gitBranchRef = useRef(persistedState?.gitBranch || null);
-  const isFullscreenTerminalActive = isAlternateScreen || isInteractiveCommandActive;
+  const isFullscreenTerminalActive = isFullscreenSessionActive(fullscreenSession);
+  const isAlternateScreen = fullscreenSession.mode === "alternate" && isFullscreenTerminalActive;
+  const isInteractiveCommandActive =
+    fullscreenSession.mode === "interactive" && isFullscreenTerminalActive;
+  const interactiveCommandKind = fullscreenSession.commandKind;
+  const fullscreenOutputStart = fullscreenSession.startOffset;
   const isFullscreenTerminalActiveRef = useRef(isFullscreenTerminalActive);
   isFullscreenTerminalActiveRef.current = isFullscreenTerminalActive;
 
@@ -228,6 +240,7 @@ export function useTerminalSession(
         isInteractiveCommandActive,
         interactiveCommandKind,
         fullscreenOutputStart,
+        fullscreenSession,
         currentDirectory,
         gitBranch,
         ...(!isFullscreenTerminalActive
@@ -245,6 +258,7 @@ export function useTerminalSession(
     isInteractiveCommandActive,
     interactiveCommandKind,
     fullscreenOutputStart,
+    fullscreenSession,
     isFullscreenTerminalActive,
     rawOutputBaseOffset,
     rawOutput,
@@ -253,12 +267,8 @@ export function useTerminalSession(
   ]);
 
   useEffect(() => {
-    fullscreenOutputStartRef.current = fullscreenOutputStart;
-  }, [fullscreenOutputStart]);
-
-  useEffect(() => {
-    interactiveCommandKindRef.current = interactiveCommandKind;
-  }, [interactiveCommandKind]);
+    fullscreenSessionRef.current = fullscreenSession;
+  }, [fullscreenSession]);
 
   useEffect(() => {
     rawOutputBaseOffsetRef.current = rawOutputBaseOffset;
@@ -310,18 +320,30 @@ export function useTerminalSession(
       paneId: paneId ?? null,
       sessionId,
       phase: phaseRef.current,
-      isAlternateScreen: isAlternateScreenRef.current,
-      isInteractiveCommandActive: interactiveCommandRef.current,
-      interactiveCommandKind: interactiveCommandKindRef.current,
+      isAlternateScreen:
+        fullscreenSessionRef.current.mode === "alternate" &&
+        isFullscreenSessionActive(fullscreenSessionRef.current),
+      isInteractiveCommandActive:
+        fullscreenSessionRef.current.mode === "interactive" &&
+        isFullscreenSessionActive(fullscreenSessionRef.current),
+      interactiveCommandKind: fullscreenSessionRef.current.commandKind,
       rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
       rawOutputLength: rawOutputRef.current.length,
-      fullscreenOutputStart: fullscreenOutputStartRef.current,
+      fullscreenOutputStart: fullscreenSessionRef.current.startOffset,
       blockCount: blockCountRef.current,
       currentDirectory: currentDirectoryRef.current,
       gitBranch: gitBranchRef.current,
     }),
     [paneId, sessionId]
   );
+
+  const applyFullscreenEvent = useCallback((event: FullscreenSessionEvent) => {
+    setFullscreenSession((prev) => {
+      const next = fullscreenSessionReducer(prev, event);
+      fullscreenSessionRef.current = next;
+      return next;
+    });
+  }, []);
 
   const publishRawOutputState = useCallback(() => {
     const nextRawOutput = rawOutputRef.current;
@@ -402,7 +424,7 @@ export function useTerminalSession(
           console.warn("[tome] Trimmed fullscreen raw output buffer", {
             trimmedCharCount: next.trimmedCharCount,
             rawOutputBaseOffset: next.rawOutputBaseOffset,
-            fullscreenOutputStart: fullscreenOutputStartRef.current,
+            fullscreenOutputStart: fullscreenSessionRef.current.startOffset,
             rawOutputLength: next.rawOutput.length,
           });
           logDiagnostics("useTerminalSession", "raw-output-trimmed", {
@@ -496,6 +518,7 @@ export function useTerminalSession(
             isInteractiveCommandActive: false,
             interactiveCommandKind: null,
             fullscreenOutputStart: 0,
+            fullscreenSession: createFullscreenSessionState(),
             rawOutputBaseOffset: 0,
             rawOutput: "",
             currentDirectory: null,
@@ -522,8 +545,8 @@ export function useTerminalSession(
               // Terminal-controlled UIs such as claude should render through xterm only.
               if (
                 phaseRef.current !== "running" ||
-                isAlternateScreenRef.current ||
-                interactiveCommandRef.current
+                fullscreenSessionRef.current.mode === "alternate" ||
+                fullscreenSessionRef.current.mode === "interactive"
               ) {
                 return;
               }
@@ -561,14 +584,12 @@ export function useTerminalSession(
                   markInputReady();
                   const cmd = pendingCommandRef.current || currentCommandRef.current;
                   const nextInteractiveCommandKind = getInteractiveAiCommandKind(cmd);
-                  const interactiveCommandActive = nextInteractiveCommandKind !== null;
-                  if (interactiveCommandRef.current !== interactiveCommandActive) {
-                    interactiveCommandRef.current = interactiveCommandActive;
-                    setIsInteractiveCommandActive(interactiveCommandActive);
-                  }
-                  setInteractiveCommandKind(nextInteractiveCommandKind);
-                  if (interactiveCommandActive) {
-                    setFullscreenOutputStart(getRawOutputEndOffset());
+                  if (nextInteractiveCommandKind) {
+                    applyFullscreenEvent({
+                      type: "interactive-command-started",
+                      commandKind: nextInteractiveCommandKind,
+                      startOffset: getRawOutputEndOffset(),
+                    });
                   }
                   pendingClaudeLaunchRef.current = null;
                   pendingCommandRef.current = "";
@@ -589,19 +610,19 @@ export function useTerminalSession(
                   logDiagnostics("useTerminalSession", "command-start", {
                     ...createSessionDiagnosticsSnapshot("command-start"),
                     command: cmd,
-                    interactiveCommandActive,
+                    interactiveCommandActive: nextInteractiveCommandKind !== null,
                     interactiveCommandKind: nextInteractiveCommandKind,
                   });
                   break;
                 }
                 case "command_end":
                   phaseRef.current = "idle";
-                  interactiveCommandRef.current = false;
                   pendingClaudeLaunchRef.current = null;
                   scheduleRawOutputPublish(true);
-                  setIsInteractiveCommandActive(false);
-                  setInteractiveCommandKind(null);
-                  setFullscreenOutputStart(getRawOutputEndOffset());
+                  applyFullscreenEvent({
+                    type: "fullscreen-session-ended",
+                    endOffset: getRawOutputEndOffset(),
+                  });
                   setBlocks((prev) => {
                     if (prev.length === 0) return prev;
                     const updated = [...prev];
@@ -624,12 +645,17 @@ export function useTerminalSession(
 
             case "alternate_screen":
               if (payload.active) {
-                setFullscreenOutputStart(getRawOutputEndOffset());
+                applyFullscreenEvent({
+                  type: "alternate-screen-entered",
+                  startOffset: getRawOutputEndOffset(),
+                });
               } else {
                 scheduleRawOutputPublish(true);
+                applyFullscreenEvent({
+                  type: "alternate-screen-exited",
+                  endOffset: getRawOutputEndOffset(),
+                });
               }
-              isAlternateScreenRef.current = payload.active;
-              setIsAlternateScreen(payload.active);
               logDiagnostics("useTerminalSession", "alternate-screen", {
                 ...createSessionDiagnosticsSnapshot("alternate-screen"),
                 active: payload.active,
@@ -703,11 +729,13 @@ export function useTerminalSession(
             ...createSessionDiagnosticsSnapshot("send-input-command"),
             command: cmd,
           });
-          if (getInteractiveAiCommandKind(cmd)) {
-            interactiveCommandRef.current = true;
-            setIsInteractiveCommandActive(true);
-            setInteractiveCommandKind(getInteractiveAiCommandKind(cmd));
-            setFullscreenOutputStart(getRawOutputEndOffset());
+          const interactiveCommandKind = getInteractiveAiCommandKind(cmd);
+          if (interactiveCommandKind) {
+            applyFullscreenEvent({
+              type: "interactive-command-detected",
+              commandKind: interactiveCommandKind,
+              startOffset: getRawOutputEndOffset(),
+            });
             pendingClaudeLaunchRef.current = data;
             return;
           }
@@ -718,7 +746,7 @@ export function useTerminalSession(
       }
       invoke("write_input", { sessionId, data });
     },
-    [getRawOutputEndOffset, isInputReady, sessionId]
+    [applyFullscreenEvent, getRawOutputEndOffset, isInputReady, sessionId]
   );
 
   const notifyFullscreenReady = useCallback(
@@ -726,7 +754,7 @@ export function useTerminalSession(
       if (!sessionId) return;
 
       const pendingLaunch = pendingClaudeLaunchRef.current;
-      if (!pendingLaunch) return;
+      if (!pendingLaunch || !fullscreenSessionRef.current.pendingLaunch) return;
 
       pendingClaudeLaunchRef.current = null;
       void invoke("resize_pty", { sessionId, cols, rows }).then(() =>
@@ -884,6 +912,7 @@ export function useTerminalSession(
     interactiveCommandKind,
     isFullscreenTerminalActive,
     fullscreenOutputStart,
+    fullscreenSession,
     rawOutputBaseOffset,
     rawOutput,
     getRawOutputSnapshot,
