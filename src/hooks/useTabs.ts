@@ -27,14 +27,7 @@ export interface UseTabsReturn {
 
   // Pane operations (scoped to active tab)
   focusedPaneId: string | null;
-  splitPane: (
-    paneId: string,
-    direction: SplitDirection,
-    keepSessionId?: string,
-    options?: {
-      preserveFocusPaneId?: string;
-    }
-  ) => string | null;
+  splitPane: (paneId: string, direction: SplitDirection, keepSessionId?: string) => string | null;
   closePane: (paneId: string) => { removedSessionIds: string[]; shouldCloseWindow: boolean };
   focusPane: (paneId: string | null) => void;
   focusNextPane: () => void;
@@ -140,14 +133,7 @@ export function useTabs(): UseTabsReturn {
   // ── Pane operations (scoped to active tab) ──
 
   const splitPane = useCallback(
-    (
-      paneId: string,
-      direction: SplitDirection,
-      keepSessionId?: string,
-      options?: {
-        preserveFocusPaneId?: string;
-      }
-    ): string | null => {
+    (paneId: string, direction: SplitDirection, keepSessionId?: string): string | null => {
       const tab = tabs.find((t) => t.id === activeTabId);
       if (!tab) return null;
 
@@ -184,7 +170,7 @@ export function useTabs(): UseTabsReturn {
         ...tab,
         rootPaneId: newRootPaneId,
         panes: newPanes,
-        focusedPaneId: options?.preserveFocusPaneId ?? newPaneId,
+        focusedPaneId: newPaneId,
       }));
 
       return newPaneId;

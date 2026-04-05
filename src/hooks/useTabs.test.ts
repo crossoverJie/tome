@@ -140,27 +140,4 @@ describe("useTabs", () => {
       expect(result.current.focusedPaneId).toBe(paneB);
     });
   });
-
-  describe("fullscreen split behavior", () => {
-    it("can preserve focus on the original pane during a split", () => {
-      const { result } = renderHook(() => useTabs());
-      const paneA = result.current.focusedPaneId!;
-
-      let paneB: string | null = null;
-      act(() => {
-        paneB = result.current.splitPane(paneA, "horizontal", undefined, {
-          preserveFocusPaneId: paneA,
-        });
-      });
-
-      expect(paneB).not.toBeNull();
-      expect(result.current.focusedPaneId).toBe(paneA);
-
-      const leaves = getLeafPaneIds(
-        result.current.activeTab.panes,
-        result.current.activeTab.rootPaneId
-      );
-      expect(leaves).toEqual([paneA, paneB]);
-    });
-  });
 });
