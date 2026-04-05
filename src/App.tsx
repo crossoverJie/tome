@@ -329,7 +329,6 @@ function App() {
             onFocusPane={focusPane}
             onUpdateSplitRatio={updateSplitRatio}
             onWorkingDirectoryChange={handleWorkingDirectoryChange}
-            containerRef={containerRef}
           />
         </div>
       ))}

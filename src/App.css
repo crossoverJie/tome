@@ -527,17 +527,16 @@ body {
 /* Split Pane Styles */
 
 .split-container {
-  display: flex;
   flex: 1;
   overflow: hidden;
 }
 
-.split-container.horizontal {
-  flex-direction: row;
-}
-
-.split-container.vertical {
-  flex-direction: column;
+.split-layout {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
 }
 
 .split-pane {
@@ -545,6 +544,20 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+}
+
+.split-pane-absolute {
+  position: absolute;
+}
+
+.split-resizer-layer {
+  position: absolute;
+  z-index: 5;
+}
+
+.split-resizer-layer .resizer {
+  width: 100%;
+  height: 100%;
 }
 
 /* Resizer */
