@@ -87,7 +87,7 @@ export function fullscreenSessionReducer(
         ...state,
         mode: "alternate",
         lifecycle: "active",
-        commandKind: null,
+        commandKind: state.commandKind,
         startOffset: event.startOffset,
         pendingLaunch: false,
       };

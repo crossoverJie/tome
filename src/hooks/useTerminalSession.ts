@@ -96,7 +96,16 @@ function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | 
     return "claude";
   }
 
-  if (basename === "copilot" || basename === "gh-copilot" || basename === "github-copilot-cli") {
+  if (basename === "gh" && tokens[index + 1] === "copilot") {
+    return "copilot";
+  }
+
+  if (
+    basename === "copilot" ||
+    basename === "copolit" ||
+    basename === "gh-copilot" ||
+    basename === "github-copilot-cli"
+  ) {
     return "copilot";
   }
 

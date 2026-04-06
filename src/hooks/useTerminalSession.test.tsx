@@ -312,6 +312,139 @@ describe("useTerminalSession", () => {
     expect(result.current.fullscreenOutputStart).toBe(result.current.rawOutput.length);
   });
 
+  it("switches gh copilot commands into terminal-controlled fullscreen mode", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: "shell prompt\n",
+        },
+      });
+    });
+
+    const preCopilotOutputLength = result.current.rawOutput.length;
+
+    act(() => {
+      result.current.sendInput("gh copilot\n");
+    });
+
+    expect(result.current.isInteractiveCommandActive).toBe(true);
+    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+    expect(result.current.fullscreenOutputStart).toBe(preCopilotOutputLength);
+    expect(invokeMock).not.toHaveBeenCalledWith("write_input", {
+      sessionId: "session-1",
+      data: "gh copilot\n",
+    });
+  });
+
+  it("switches copolit commands into terminal-controlled fullscreen mode", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "raw_output",
+          session_id: "session-1",
+          data: "shell prompt\n",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("copolit\n");
+    });
+
+    expect(result.current.isInteractiveCommandActive).toBe(true);
+    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+    expect(invokeMock).not.toHaveBeenCalledWith("write_input", {
+      sessionId: "session-1",
+      data: "copolit\n",
+    });
+  });
+
+  it("keeps Copilot interactive command kind after alternate screen activation", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("copolit\n");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "alternate_screen",
+          session_id: "session-1",
+          active: true,
+        },
+      });
+    });
+
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.isAlternateScreen).toBe(true);
+  });
+
   it("recognizes path-qualified claude invocations with env prefixes", async () => {
     const { result } = renderHook(() => useTerminalSession("pane-1"));
 

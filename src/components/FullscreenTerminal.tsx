@@ -347,6 +347,28 @@ function getTerminalClickCoords(
   };
 }
 
+function isAiAgentFullscreenInput(
+  interactiveCommandKind: "claude" | "copilot" | null | undefined
+): interactiveCommandKind is "claude" | "copilot" {
+  return interactiveCommandKind === "claude" || interactiveCommandKind === "copilot";
+}
+
+function shouldForwardTextareaInput(
+  event: InputEvent,
+  interactiveCommandKind: "claude" | "copilot" | null | undefined
+): boolean {
+  const inputData = event.data;
+  if (!isAiAgentFullscreenInput(interactiveCommandKind) || !inputData || event.isComposing) {
+    return false;
+  }
+
+  if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
+    return false;
+  }
+
+  return !inputData.includes("\n") && !inputData.includes("\r");
+}
+
 interface FullscreenTerminalProps {
   sessionId: string | null;
   visible: boolean;
@@ -400,6 +422,7 @@ export function FullscreenTerminal({
   });
   const textareaListenersRef = useRef<{
     textarea: HTMLTextAreaElement;
+    keydownHandler: (e: KeyboardEvent) => void;
     compositionstartHandler: () => void;
     compositionendHandler: () => void;
     inputHandler: (e: Event) => void;
@@ -802,7 +825,7 @@ export function FullscreenTerminal({
         onData("\x05");
         return false;
       }
-      if (event.shiftKey && event.key === "Enter") {
+      if (event.shiftKey && event.key === "Enter" && isAiAgentFullscreenInput(interactiveCommandKind)) {
         onData("\x1b[13;2u");
         return false;
       }
@@ -816,6 +839,18 @@ export function FullscreenTerminal({
     const attachToTextarea = (retriesRemaining: number): void => {
       const textarea = containerRef.current?.querySelector("textarea");
       if (textarea) {
+        const keydownHandler = (e: KeyboardEvent): void => {
+          if (!isAiAgentFullscreenInput(interactiveCommandKind)) {
+            return;
+          }
+
+          if (e.key === "Enter" && e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            onData("\x1b[13;2u");
+          }
+        };
         const compositionstartHandler = (): void => {
           isComposingRef.current = true;
         };
@@ -824,30 +859,34 @@ export function FullscreenTerminal({
         };
         const inputHandler = (e: Event): void => {
           if (!(e instanceof InputEvent)) return;
+          const shouldForward = shouldForwardTextareaInput(e, interactiveCommandKind);
+          if (!shouldForward) return;
+
           const inputData = e.data;
-          if (inputData && !e.isComposing) {
-            // Check if xterm already handled this input
-            setTimeout(() => {
-              const wasHandled = recentXtermDataRef.current.includes(inputData);
-              if (!wasHandled) {
-                onData(inputData);
-              } else {
-                // Remove from recent list to avoid false positives
-                const index = recentXtermDataRef.current.indexOf(inputData);
-                if (index > -1) {
-                  recentXtermDataRef.current.splice(index, 1);
-                }
+          if (!inputData) return;
+          // Check if xterm already handled this input
+          setTimeout(() => {
+            const wasHandled = recentXtermDataRef.current.includes(inputData);
+            if (!wasHandled) {
+              onData(inputData);
+            } else {
+              // Remove from recent list to avoid false positives
+              const index = recentXtermDataRef.current.indexOf(inputData);
+              if (index > -1) {
+                recentXtermDataRef.current.splice(index, 1);
               }
-            }, 10);
-          }
+            }
+          }, 10);
         };
 
+        textarea.addEventListener("keydown", keydownHandler, true);
         textarea.addEventListener("compositionstart", compositionstartHandler);
         textarea.addEventListener("compositionend", compositionendHandler);
         textarea.addEventListener("input", inputHandler);
 
         textareaListenersRef.current = {
           textarea,
+          keydownHandler,
           compositionstartHandler,
           compositionendHandler,
           inputHandler,
@@ -872,8 +911,9 @@ export function FullscreenTerminal({
 
       // Remove textarea event listeners
       if (textareaListenersRef.current) {
-        const { textarea, compositionstartHandler, compositionendHandler, inputHandler } =
+        const { textarea, keydownHandler, compositionstartHandler, compositionendHandler, inputHandler } =
           textareaListenersRef.current;
+        textarea.removeEventListener("keydown", keydownHandler, true);
         textarea.removeEventListener("compositionstart", compositionstartHandler);
         textarea.removeEventListener("compositionend", compositionendHandler);
         textarea.removeEventListener("input", inputHandler);
@@ -893,6 +933,7 @@ export function FullscreenTerminal({
     flushPendingWrites,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
+    interactiveCommandKind,
     requestCursorProbe,
     sessionId,
   ]);
