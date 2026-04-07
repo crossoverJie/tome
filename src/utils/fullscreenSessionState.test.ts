@@ -70,4 +70,22 @@ describe("fullscreenSessionState", () => {
     expect(refocused.lifecycle).toBe("active");
     expect(refocused.mode).toBe("interactive");
   });
+
+  it("preserves the interactive command kind when an AI session enters alternate screen", () => {
+    const interactive = fullscreenSessionReducer(createFullscreenSessionState(), {
+      type: "interactive-command-started",
+      commandKind: "copilot",
+      startOffset: 32,
+    });
+
+    const alternate = fullscreenSessionReducer(interactive, {
+      type: "alternate-screen-entered",
+      startOffset: 48,
+    });
+
+    expect(alternate.mode).toBe("alternate");
+    expect(alternate.lifecycle).toBe("active");
+    expect(alternate.commandKind).toBe("copilot");
+    expect(alternate.startOffset).toBe(48);
+  });
 });

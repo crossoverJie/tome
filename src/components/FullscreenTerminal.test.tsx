@@ -125,6 +125,12 @@ vi.mock("@xterm/addon-fit", () => ({
 }));
 
 describe("FullscreenTerminal", () => {
+  const getCustomKeyHandler = (): ((event: KeyboardEvent) => boolean) => {
+    const handler = terminalMocks.attachCustomKeyEventHandler.mock.calls[0]?.[0];
+    expect(handler).toBeTypeOf("function");
+    return handler as (event: KeyboardEvent) => boolean;
+  };
+
   beforeEach(() => {
     vi.useFakeTimers();
     terminalMocks.write.mockReset();
@@ -712,5 +718,161 @@ describe("FullscreenTerminal", () => {
       col: 21,
       staged: true,
     });
+  });
+
+  it("sends soft newline for Shift+Enter in Claude fullscreen input", () => {
+    const onData = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        interactiveCommandKind={"claude"}
+      />
+    );
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "Enter",
+      shiftKey: true,
+      metaKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
+  });
+
+  it("does not intercept Shift+Enter outside AI agent fullscreen input", () => {
+    const onData = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+      />
+    );
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "Enter",
+      shiftKey: true,
+      metaKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(true);
+    expect(onData).not.toHaveBeenCalledWith("\x1b[13;2u");
+  });
+
+  it("does not replay newline textarea input for Claude fullscreen input fallback", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        interactiveCommandKind={"claude"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      textarea.dispatchEvent(new InputEvent("input", { data: "\n", inputType: "insertLineBreak" }));
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(onData).not.toHaveBeenCalledWith("\n");
+  });
+
+  it("still replays IME punctuation text for Claude fullscreen input fallback", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        interactiveCommandKind={"claude"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      textarea.dispatchEvent(new InputEvent("input", { data: "？", inputType: "insertText" }));
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(onData).toHaveBeenCalledWith("？");
+  });
+
+  it("prevents native textarea Shift+Enter submission in Claude fullscreen input", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        interactiveCommandKind={"claude"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const event = new KeyboardEvent("keydown", {
+      key: "Enter",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    textarea.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
   });
 });
