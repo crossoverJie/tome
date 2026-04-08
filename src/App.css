@@ -240,14 +240,6 @@ body {
   font-weight: 500;
 }
 
-/* Sticky running block header */
-.block-sticky {
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
-}
-
 /* Input area busy state */
 .input-editor.busy {
   opacity: 0.7;

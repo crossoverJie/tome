@@ -43,7 +43,6 @@ type Phase = "prompt" | "input" | "running" | "idle";
 // Running block status state machine
 export type RunningBlockStatus =
   | "starting"      // Just started, no output yet
-  | "running_silent" // No output for threshold period
   | "streaming"     // Actively receiving output
   | "quiet";        // No new output for a while (but still running)
 
@@ -304,6 +303,10 @@ export function useTerminalSession(
   useEffect(() => {
     runningBlockRef.current = runningBlock;
   }, [runningBlock]);
+
+  useEffect(() => {
+    fullscreenSessionRef.current = fullscreenSession;
+  }, [fullscreenSession]);
 
   useEffect(() => {
     rawOutputBaseOffsetRef.current = rawOutputBaseOffset;

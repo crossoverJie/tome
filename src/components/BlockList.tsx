@@ -30,8 +30,6 @@ export function BlockList({
   const runningBlockIndex = runningBlock
     ? blocks.findIndex((b) => b.id === runningBlock.blockId)
     : -1;
-  // Track if running block is the last block (used for scroll detection)
-  void runningBlockIndex;
 
   // Auto-scroll to bottom when new output arrives
   useEffect(() => {

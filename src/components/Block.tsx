@@ -46,7 +46,6 @@ interface BlockProps {
   runningStatus?: RunningBlockStatus;
   silenceMs?: number;
   hasInlineProgress?: boolean;
-  isStickyActiveCommand?: boolean;
 }
 
 export function formatDuration(start: number, end: number | null): string {
@@ -220,7 +219,6 @@ export const Block = memo(function Block({
   runningStatus = "starting",
   silenceMs = 0,
   hasInlineProgress = false,
-  isStickyActiveCommand = false,
 }: BlockProps) {
   const outputRef = useRef<HTMLPreElement>(null);
   const runningDuration = useRunningDuration(startTime, isRunning);
@@ -247,7 +245,6 @@ export const Block = memo(function Block({
 
   const exitCodeClass = exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
   const runningClass = isRunning ? "block-running" : "";
-  const stickyClass = isStickyActiveCommand ? "block-sticky" : "";
 
   // Get status text for running block
   const statusText = isRunning
@@ -256,7 +253,7 @@ export const Block = memo(function Block({
 
   return (
     <div
-      className={`block ${isSelected ? "block-selected" : ""} ${exitCodeClass} ${runningClass} ${stickyClass}`}
+      className={`block ${isSelected ? "block-selected" : ""} ${exitCodeClass} ${runningClass}`}
       onClick={onClick}
     >
       <div className="block-header">
