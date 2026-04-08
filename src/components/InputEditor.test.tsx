@@ -232,4 +232,25 @@ describe("InputEditor", () => {
   // The fix in handleSubmit ensures that when completionStateRef.current.open is true
   // but applySelectedCompletion returns false (due to race condition), Enter still
   // submits the command instead of returning false to CodeMirror.
+
+  describe("busy state", () => {
+    it("renders busy indicator when busy prop is true", async () => {
+      const { container } = await renderEditor({ busy: true });
+      const busyIndicator = container.querySelector(".input-busy-indicator");
+      expect(busyIndicator).toBeTruthy();
+      expect(busyIndicator?.textContent).toContain("Command running...");
+    });
+
+    it("does not render busy indicator when busy prop is false", async () => {
+      const { container } = await renderEditor({ busy: false });
+      const busyIndicator = container.querySelector(".input-busy-indicator");
+      expect(busyIndicator).toBeFalsy();
+    });
+
+    it("adds busy class to input-editor when busy", async () => {
+      const { container } = await renderEditor({ busy: true });
+      const editor = container.querySelector(".input-editor");
+      expect(editor?.classList.contains("busy")).toBe(true);
+    });
+  });
 });
