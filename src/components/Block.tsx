@@ -1,6 +1,7 @@
-import { useRef, useEffect, memo } from "react";
+import { useRef, useEffect, useState, memo } from "react";
 import AnsiToHtml from "ansi-to-html";
 import { processTerminalOutput } from "../utils/terminalOutput";
+import type { RunningBlockStatus } from "../hooks/useTerminalSession";
 
 const ansiConverter = new AnsiToHtml({
   fg: "#d4d4d4",
@@ -40,6 +41,11 @@ interface BlockProps {
   // Search
   searchRanges?: Array<{ start: number; end: number }>;
   activeSearchRange?: { start: number; end: number } | null;
+  // Running block
+  isRunning?: boolean;
+  runningStatus?: RunningBlockStatus;
+  silenceMs?: number;
+  hasInlineProgress?: boolean;
 }
 
 export function formatDuration(start: number, end: number | null): string {
@@ -47,6 +53,60 @@ export function formatDuration(start: number, end: number | null): string {
   const ms = end - start;
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// Format running duration for display
+function formatRunningDuration(startTime: number): string {
+  const ms = Date.now() - startTime;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// Format silence duration for display
+function formatSilence(ms: number): string {
+  if (ms < 1000) return `${Math.floor(ms / 100) * 100}ms`;
+  return `${Math.floor(ms / 1000)}s`;
+}
+
+// Get status text based on running status
+function getStatusText(
+  status: RunningBlockStatus,
+  silenceMs: number,
+  hasInlineProgress: boolean
+): string {
+  switch (status) {
+    case "starting":
+      return "Running";
+    case "streaming":
+      return hasInlineProgress ? "Streaming output · Updating in place" : "Streaming output";
+    case "quiet":
+      return `No new output for ${formatSilence(silenceMs)}`;
+    default:
+      return "Running";
+  }
+}
+
+// Hook to update running duration every 100ms
+function useRunningDuration(startTime: number, isRunning: boolean): string {
+  const [duration, setDuration] = useState(() =>
+    isRunning ? formatRunningDuration(startTime) : ""
+  );
+
+  useEffect(() => {
+    if (!isRunning) {
+      setDuration("");
+      return;
+    }
+
+    setDuration(formatRunningDuration(startTime));
+    const interval = setInterval(() => {
+      setDuration(formatRunningDuration(startTime));
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [startTime, isRunning]);
+
+  return duration;
 }
 
 // Helper function to highlight search results in ANSI text
@@ -154,8 +214,14 @@ export const Block = memo(function Block({
   onToggleCollapse,
   searchRanges,
   activeSearchRange,
+  // Running block props
+  isRunning = false,
+  runningStatus = "starting",
+  silenceMs = 0,
+  hasInlineProgress = false,
 }: BlockProps) {
   const outputRef = useRef<HTMLPreElement>(null);
+  const runningDuration = useRunningDuration(startTime, isRunning);
 
   useEffect(() => {
     if (outputRef.current) {
@@ -178,10 +244,16 @@ export const Block = memo(function Block({
   }, [output, searchRanges, activeSearchRange]);
 
   const exitCodeClass = exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
+  const runningClass = isRunning ? "block-running" : "";
+
+  // Get status text for running block
+  const statusText = isRunning
+    ? getStatusText(runningStatus, silenceMs, hasInlineProgress)
+    : "";
 
   return (
     <div
-      className={`block ${isSelected ? "block-selected" : ""} ${exitCodeClass}`}
+      className={`block ${isSelected ? "block-selected" : ""} ${exitCodeClass} ${runningClass}`}
       onClick={onClick}
     >
       <div className="block-header">
@@ -197,13 +269,27 @@ export const Block = memo(function Block({
         </button>
         <span className="block-prompt">$</span>
         <span className="block-command">{command || "(empty)"}</span>
+        {isRunning && (
+          <span className="block-running-indicator" aria-label="Running">
+            <span className="running-dot" />
+          </span>
+        )}
         <span className="block-meta">
-          {isComplete && exitCode !== null && (
-            <span className={`block-exit-code ${exitCode === 0 ? "success" : "error"}`}>
-              {exitCode === 0 ? "✓" : `✗ ${exitCode}`}
-            </span>
+          {isRunning ? (
+            <>
+              <span className="block-status">{statusText}</span>
+              <span className="block-duration running">{runningDuration}</span>
+            </>
+          ) : (
+            <>
+              {isComplete && exitCode !== null && (
+                <span className={`block-exit-code ${exitCode === 0 ? "success" : "error"}`}>
+                  {exitCode === 0 ? "✓" : `✗ ${exitCode}`}
+                </span>
+              )}
+              <span className="block-duration">{formatDuration(startTime, endTime)}</span>
+            </>
           )}
-          <span className="block-duration">{formatDuration(startTime, endTime)}</span>
         </span>
       </div>
       {!isCollapsed && output && (

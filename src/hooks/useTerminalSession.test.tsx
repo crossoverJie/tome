@@ -710,4 +710,208 @@ describe("useTerminalSession", () => {
     });
     expect(result.current.fullscreenOutputStart).toBe(0);
   });
+
+  describe("running block state", () => {
+    it("initializes running block on command_start and clears on command_end", async () => {
+      const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+      await waitFor(() => {
+        expect(result.current.sessionId).toBe("session-1");
+      });
+
+      // Initially no running block
+      expect(result.current.runningBlock).toBeNull();
+      expect(result.current.hasRunningCommand).toBe(false);
+
+      // Emit input_start to prepare
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "input_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      // Send a command
+      act(() => {
+        result.current.sendInput("git pull\n");
+      });
+
+      // Emit command_start
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      // Running block should be initialized
+      await waitFor(() => {
+        expect(result.current.runningBlock).not.toBeNull();
+        expect(result.current.hasRunningCommand).toBe(true);
+      });
+
+      const runningBlock = result.current.runningBlock;
+      expect(runningBlock?.status).toBe("starting");
+      expect(runningBlock?.silenceMs).toBe(0);
+      expect(runningBlock?.hasInlineProgress).toBe(false);
+
+      // Emit command_end
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_end",
+            exit_code: 0,
+          },
+        });
+      });
+
+      // Running block should be cleared
+      expect(result.current.runningBlock).toBeNull();
+      expect(result.current.hasRunningCommand).toBe(false);
+    });
+
+    it("transitions to streaming status when output is received", async () => {
+      const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+      await waitFor(() => {
+        expect(result.current.sessionId).toBe("session-1");
+      });
+
+      // Start a command
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "input_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      act(() => {
+        result.current.sendInput("echo test\n");
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.runningBlock?.status).toBe("starting");
+      });
+
+      // Emit output
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "some output\n",
+          },
+        });
+      });
+
+      // Status should transition to streaming
+      await waitFor(() => {
+        expect(result.current.runningBlock?.status).toBe("streaming");
+      });
+
+      // Clean up
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_end",
+            exit_code: 0,
+          },
+        });
+      });
+    });
+
+    it("detects inline progress from carriage return", async () => {
+      const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+      await waitFor(() => {
+        expect(result.current.sessionId).toBe("session-1");
+      });
+
+      // Start a command
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "input_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      act(() => {
+        result.current.sendInput("progress.sh\n");
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.runningBlock).not.toBeNull();
+      });
+
+      // Emit output with carriage return (progress indicator)
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "\rProgress: 50%",
+          },
+        });
+      });
+
+      // Should detect inline progress
+      await waitFor(() => {
+        expect(result.current.runningBlock?.hasInlineProgress).toBe(true);
+      });
+
+      // Clean up
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_end",
+            exit_code: 0,
+          },
+        });
+      });
+    });
+  });
 });

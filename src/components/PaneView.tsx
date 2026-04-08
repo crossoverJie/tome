@@ -50,6 +50,12 @@ export function PaneView({
     nextSearchResult,
     prevSearchResult,
     clearSearch,
+    // Running block
+    runningBlock,
+    // Block navigation
+    selectPrevBlock,
+    selectNextBlock,
+    clearBlocks,
   } = useTerminalSession(paneId, sessionId);
 
   // Search overlay visibility state (local to each pane)
@@ -154,6 +160,27 @@ export function PaneView({
     if (!isFocused) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K - clear all blocks
+      if (e.metaKey && e.key === "k" && !e.shiftKey) {
+        e.preventDefault();
+        clearBlocks();
+        return;
+      }
+
+      // Cmd+↑ - navigate to previous block
+      if (e.metaKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        selectPrevBlock();
+        return;
+      }
+
+      // Cmd+↓ - navigate to next block
+      if (e.metaKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        selectNextBlock();
+        return;
+      }
+
       // Cmd+F - toggle search
       if (e.metaKey && e.key === "f") {
         e.preventDefault();
@@ -193,6 +220,9 @@ export function PaneView({
     toggleBlockCollapse,
     toggleSearch,
     closeSearch,
+    clearBlocks,
+    selectPrevBlock,
+    selectNextBlock,
   ]);
 
   // Handle pane focus when clicked
@@ -239,6 +269,7 @@ export function PaneView({
             onToggleCollapse={toggleBlockCollapse}
             searchResults={searchResults}
             currentSearchIndex={currentSearchIndex}
+            runningBlock={runningBlock}
           />
           <InputEditor
             onSubmit={handleSubmit}
@@ -250,6 +281,7 @@ export function PaneView({
               invoke<boolean>("check_path_exists", { path, cwd: currentDirectory ?? "/" })
             }
             disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
+            busy={!!runningBlock}
             gitBranch={gitBranch}
             currentDirectory={currentDirectory}
           />

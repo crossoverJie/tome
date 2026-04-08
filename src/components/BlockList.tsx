@@ -1,6 +1,6 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Block as BlockComponent } from "./Block";
-import type { Block, SearchResult } from "../hooks/useTerminalSession";
+import type { Block, SearchResult, RunningBlockState } from "../hooks/useTerminalSession";
 
 interface BlockListProps {
   blocks: Block[];
@@ -10,6 +10,8 @@ interface BlockListProps {
   // Search
   searchResults: SearchResult[];
   currentSearchIndex: number;
+  // Running block
+  runningBlock: RunningBlockState | null;
 }
 
 export function BlockList({
@@ -19,8 +21,15 @@ export function BlockList({
   onToggleCollapse,
   searchResults,
   currentSearchIndex,
+  runningBlock,
 }: BlockListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showStickyHeader, setShowStickyHeader] = useState(false);
+
+  // Find the running block index
+  const runningBlockIndex = runningBlock
+    ? blocks.findIndex((b) => b.id === runningBlock.blockId)
+    : -1;
 
   // Auto-scroll to bottom when new output arrives
   useEffect(() => {
@@ -52,6 +61,43 @@ export function BlockList({
     }
   }, [currentSearchIndex, searchResults]);
 
+  // Track if running block is scrolled out of view
+  useEffect(() => {
+    if (!runningBlock || runningBlockIndex < 0 || !containerRef.current) {
+      setShowStickyHeader(false);
+      return;
+    }
+
+    const container = containerRef.current;
+    const handleScroll = () => {
+      const runningEl = container.children[runningBlockIndex] as HTMLElement | undefined;
+      if (runningEl) {
+        const rect = runningEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        // Show sticky if running block is above the visible area
+        // (its bottom is above the container's top + some margin)
+        const isScrolledOut = rect.bottom < containerRect.top + 100;
+        // Or if it's below the visible area
+        const isBelowVisible = rect.top > containerRect.bottom - 50;
+        setShowStickyHeader(isScrolledOut || isBelowVisible);
+      }
+    };
+
+    container.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [runningBlock, runningBlockIndex, blocks.length]);
+
+  // Jump to running block
+  const jumpToRunningBlock = () => {
+    if (runningBlockIndex >= 0 && containerRef.current) {
+      const blockEl = containerRef.current.children[runningBlockIndex];
+      if (blockEl) {
+        blockEl.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+    }
+  };
+
   // Helper to get search ranges for a specific block
   const getSearchRangesForBlock = (blockId: string) => {
     return searchResults
@@ -69,26 +115,44 @@ export function BlockList({
 
   return (
     <div className="block-list" ref={containerRef}>
-      {blocks.map((block, index) => (
-        <BlockComponent
-          key={block.id}
-          command={block.command}
-          output={block.output}
-          exitCode={block.exitCode}
-          startTime={block.startTime}
-          endTime={block.endTime}
-          isComplete={block.isComplete}
-          isSelected={selectedBlockIndex === index}
-          isCollapsed={block.isCollapsed}
-          onClick={() => onSelectBlock(selectedBlockIndex === index ? null : index)}
-          onToggleCollapse={() => {
-            onSelectBlock(index);
-            onToggleCollapse(block.id);
-          }}
-          searchRanges={getSearchRangesForBlock(block.id)}
-          activeSearchRange={getActiveSearchRangeForBlock(block.id)}
-        />
-      ))}
+      {blocks.map((block, index) => {
+        const isRunning = runningBlock?.blockId === block.id && !block.isComplete;
+        return (
+          <BlockComponent
+            key={block.id}
+            command={block.command}
+            output={block.output}
+            exitCode={block.exitCode}
+            startTime={block.startTime}
+            endTime={block.endTime}
+            isComplete={block.isComplete}
+            isSelected={selectedBlockIndex === index}
+            isCollapsed={block.isCollapsed}
+            onClick={() => onSelectBlock(selectedBlockIndex === index ? null : index)}
+            onToggleCollapse={() => {
+              onSelectBlock(index);
+              onToggleCollapse(block.id);
+            }}
+            searchRanges={getSearchRangesForBlock(block.id)}
+            activeSearchRange={getActiveSearchRangeForBlock(block.id)}
+            // Running block props
+            isRunning={isRunning}
+            runningStatus={isRunning ? runningBlock?.status : undefined}
+            silenceMs={isRunning ? runningBlock?.silenceMs : undefined}
+            hasInlineProgress={isRunning ? runningBlock?.hasInlineProgress : undefined}
+          />
+        );
+      })}
+      {/* Sticky running block summary */}
+      {showStickyHeader && runningBlock && runningBlockIndex >= 0 && (
+        <div className="block-list-sticky-header" onClick={jumpToRunningBlock}>
+          <span className="sticky-indicator">●</span>
+          <span className="sticky-command">
+            {blocks[runningBlockIndex]?.command || "Running command"}
+          </span>
+          <span className="sticky-status">Click to view</span>
+        </div>
+      )}
     </div>
   );
 }

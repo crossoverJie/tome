@@ -61,6 +61,9 @@ function buildHookState() {
     nextSearchResult: vi.fn(),
     prevSearchResult: vi.fn(),
     clearSearch: vi.fn(),
+    // Running block state
+    runningBlock: null,
+    hasRunningCommand: false,
   };
 }
 
@@ -136,5 +139,100 @@ describe("PaneView", () => {
 
     expect(onFocus).toHaveBeenCalled();
     expect(screen.getByText("Click to focus")).toBeTruthy();
+  });
+
+  describe("keyboard shortcuts", () => {
+    it("calls clearBlocks when Cmd+K is pressed", () => {
+      const clearBlocks = vi.fn();
+      useTerminalSessionMock.mockReturnValue({
+        ...buildHookState(),
+        clearBlocks,
+        isFocused: true,
+      });
+
+      render(
+        <PaneView
+          paneId="pane-1"
+          isFocused={true}
+          onFocus={() => {}}
+          onWorkingDirectoryChange={() => {}}
+        />
+      );
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      expect(clearBlocks).toHaveBeenCalled();
+    });
+
+    it("calls selectPrevBlock when Cmd+ArrowUp is pressed", () => {
+      const selectPrevBlock = vi.fn();
+      useTerminalSessionMock.mockReturnValue({
+        ...buildHookState(),
+        selectPrevBlock,
+        isFocused: true,
+      });
+
+      render(
+        <PaneView
+          paneId="pane-1"
+          isFocused={true}
+          onFocus={() => {}}
+          onWorkingDirectoryChange={() => {}}
+        />
+      );
+
+      fireEvent.keyDown(window, { key: "ArrowUp", metaKey: true });
+      expect(selectPrevBlock).toHaveBeenCalled();
+    });
+
+    it("calls selectNextBlock when Cmd+ArrowDown is pressed", () => {
+      const selectNextBlock = vi.fn();
+      useTerminalSessionMock.mockReturnValue({
+        ...buildHookState(),
+        selectNextBlock,
+        isFocused: true,
+      });
+
+      render(
+        <PaneView
+          paneId="pane-1"
+          isFocused={true}
+          onFocus={() => {}}
+          onWorkingDirectoryChange={() => {}}
+        />
+      );
+
+      fireEvent.keyDown(window, { key: "ArrowDown", metaKey: true });
+      expect(selectNextBlock).toHaveBeenCalled();
+    });
+
+    it("does not trigger shortcuts when pane is not focused", () => {
+      const clearBlocks = vi.fn();
+      const selectPrevBlock = vi.fn();
+      const selectNextBlock = vi.fn();
+      useTerminalSessionMock.mockReturnValue({
+        ...buildHookState(),
+        clearBlocks,
+        selectPrevBlock,
+        selectNextBlock,
+        isFocused: false,
+      });
+
+      render(
+        <PaneView
+          paneId="pane-1"
+          isFocused={false}
+          onFocus={() => {}}
+          onWorkingDirectoryChange={() => {}}
+        />
+      );
+
+      fireEvent.keyDown(window, { key: "k", metaKey: true });
+      fireEvent.keyDown(window, { key: "ArrowUp", metaKey: true });
+      fireEvent.keyDown(window, { key: "ArrowDown", metaKey: true });
+
+      expect(clearBlocks).not.toHaveBeenCalled();
+      expect(selectPrevBlock).not.toHaveBeenCalled();
+      expect(selectNextBlock).not.toHaveBeenCalled();
+    });
   });
 });
