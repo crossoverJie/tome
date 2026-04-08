@@ -27,6 +27,10 @@ vi.mock("./FullscreenTerminal", () => ({
   ),
 }));
 
+vi.mock("./RunningCommandBar", () => ({
+  RunningCommandBar: () => <div>RunningCommandBar</div>,
+}));
+
 function buildHookState() {
   return {
     sessionId: "session-1",
@@ -64,6 +68,9 @@ function buildHookState() {
     // Running block state
     runningBlock: null,
     hasRunningCommand: false,
+    // Pane input mode
+    paneInputMode: "editor",
+    sendControlInput: vi.fn(),
   };
 }
 

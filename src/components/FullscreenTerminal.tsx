@@ -825,7 +825,11 @@ export function FullscreenTerminal({
         onData("\x05");
         return false;
       }
-      if (event.shiftKey && event.key === "Enter" && isAiAgentFullscreenInput(interactiveCommandKind)) {
+      if (
+        event.shiftKey &&
+        event.key === "Enter" &&
+        isAiAgentFullscreenInput(interactiveCommandKind)
+      ) {
         onData("\x1b[13;2u");
         return false;
       }
@@ -911,8 +915,13 @@ export function FullscreenTerminal({
 
       // Remove textarea event listeners
       if (textareaListenersRef.current) {
-        const { textarea, keydownHandler, compositionstartHandler, compositionendHandler, inputHandler } =
-          textareaListenersRef.current;
+        const {
+          textarea,
+          keydownHandler,
+          compositionstartHandler,
+          compositionendHandler,
+          inputHandler,
+        } = textareaListenersRef.current;
         textarea.removeEventListener("keydown", keydownHandler, true);
         textarea.removeEventListener("compositionstart", compositionstartHandler);
         textarea.removeEventListener("compositionend", compositionendHandler);
