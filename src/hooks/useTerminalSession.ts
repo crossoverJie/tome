@@ -40,14 +40,17 @@ export interface Block {
 
 type Phase = "prompt" | "input" | "running" | "idle";
 
+// Pane input mode determines which component owns keyboard input
+export type PaneInputMode = "editor" | "running-control" | "fullscreen-terminal";
+
 // Running block status state machine
 export type RunningBlockStatus =
-  | "starting"      // Just started, no output yet
-  | "streaming"     // Actively receiving output
-  | "quiet";        // No new output for a while (but still running)
+  | "starting" // Just started, no output yet
+  | "streaming" // Actively receiving output
+  | "quiet"; // No new output for a while (but still running)
 
 // Constants for status transitions
-const SILENCE_THRESHOLD_MS = 2000;  // Time before considering command "quiet"
+const SILENCE_THRESHOLD_MS = 2000; // Time before considering command "quiet"
 
 export interface SearchResult {
   blockId: string;
@@ -175,6 +178,9 @@ interface UseTerminalSessionReturn {
   // Running block state
   runningBlock: RunningBlockState | null;
   hasRunningCommand: boolean;
+  // Pane input mode
+  paneInputMode: PaneInputMode;
+  sendControlInput: (data: string) => void;
 }
 
 const INITIAL_INPUT_READY_FALLBACK_MS = 150;
@@ -259,6 +265,13 @@ export function useTerminalSession(
   const fullscreenOutputStart = fullscreenSession.startOffset;
   const isFullscreenTerminalActiveRef = useRef(isFullscreenTerminalActive);
   isFullscreenTerminalActiveRef.current = isFullscreenTerminalActive;
+
+  // Derive pane input mode based on session state
+  const paneInputMode: PaneInputMode = isFullscreenTerminalActive
+    ? "fullscreen-terminal"
+    : hasRunningCommand
+      ? "running-control"
+      : "editor";
 
   // Search state
   const [searchQuery, setSearchQueryState] = useState("");
@@ -594,7 +607,7 @@ export function useTerminalSession(
               if (currentRunning) {
                 const now = Date.now();
                 // Check for inline progress (carriage return)
-                const hasInlineProgress = data.includes('\r') || currentRunning.hasInlineProgress;
+                const hasInlineProgress = data.includes("\r") || currentRunning.hasInlineProgress;
                 setRunningBlock({
                   ...currentRunning,
                   status: "streaming",
@@ -839,6 +852,15 @@ export function useTerminalSession(
     [applyFullscreenEvent, getRawOutputEndOffset, isInputReady, sessionId]
   );
 
+  // Send raw control bytes to PTY (e.g., \x03 for Ctrl+C, \x1a for Ctrl+Z)
+  const sendControlInput = useCallback(
+    (data: string) => {
+      if (!sessionId || !isInputReady) return;
+      invoke("write_input", { sessionId, data });
+    },
+    [isInputReady, sessionId]
+  );
+
   const notifyFullscreenReady = useCallback(
     (cols: number, rows: number) => {
       if (!sessionId) return;
@@ -1031,5 +1053,8 @@ export function useTerminalSession(
     // Running block state
     runningBlock,
     hasRunningCommand,
+    // Pane input mode
+    paneInputMode,
+    sendControlInput,
   };
 }

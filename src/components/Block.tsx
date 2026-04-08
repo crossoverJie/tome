@@ -247,9 +247,7 @@ export const Block = memo(function Block({
   const runningClass = isRunning ? "block-running" : "";
 
   // Get status text for running block
-  const statusText = isRunning
-    ? getStatusText(runningStatus, silenceMs, hasInlineProgress)
-    : "";
+  const statusText = isRunning ? getStatusText(runningStatus, silenceMs, hasInlineProgress) : "";
 
   return (
     <div

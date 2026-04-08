@@ -183,11 +183,7 @@ body {
 /* Running Block Styles */
 .block-running {
   border-left: 3px solid var(--accent);
-  background: linear-gradient(
-    90deg,
-    rgba(124, 124, 255, 0.08) 0%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg, rgba(124, 124, 255, 0.08) 0%, transparent 100%);
 }
 
 .block-running-indicator {
@@ -516,6 +512,115 @@ body {
   color: var(--syntax-error) !important;
   text-decoration: underline wavy var(--syntax-error);
   text-underline-offset: 2px;
+}
+
+/* Running Command Bar */
+.running-command-bar {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border-top: 1px solid var(--border-color);
+  padding: 8px 12px;
+  min-height: 40px;
+  cursor: default;
+  outline: none;
+}
+
+.running-command-bar:focus {
+  background: var(--bg-secondary);
+}
+
+.running-command-bar .input-prompt {
+  color: var(--accent);
+  font-weight: bold;
+  padding: 0 8px 0 0;
+  user-select: none;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.running-command-bar .input-prompt .git-branch {
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+
+.running-command-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 12px;
+}
+
+.running-command-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.running-command-text {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.running-command-status {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.running-command-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.running-command-shortcuts {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  background: var(--bg-block);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.running-command-interrupt-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--bg-block);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.running-command-interrupt-button:hover {
+  background: var(--error);
+  border-color: var(--error);
+  color: white;
+}
+
+.running-command-interrupt-button svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Fullscreen Terminal */

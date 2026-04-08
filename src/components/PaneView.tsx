@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { BlockList } from "./BlockList";
 import { InputEditor } from "./InputEditor";
+import { RunningCommandBar } from "./RunningCommandBar";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
@@ -52,6 +53,9 @@ export function PaneView({
     clearSearch,
     // Running block
     runningBlock,
+    // Pane input mode
+    paneInputMode,
+    sendControlInput,
     // Block navigation
     selectPrevBlock,
     selectNextBlock,
@@ -271,20 +275,32 @@ export function PaneView({
             currentSearchIndex={currentSearchIndex}
             runningBlock={runningBlock}
           />
-          <InputEditor
-            onSubmit={handleSubmit}
-            onRequestCompletion={requestCompletion}
-            onCheckCommandExists={(cmd) =>
-              invoke<boolean>("check_command_exists", { command: cmd })
-            }
-            onCheckPathExists={(path) =>
-              invoke<boolean>("check_path_exists", { path, cwd: currentDirectory ?? "/" })
-            }
-            disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
-            busy={!!runningBlock}
-            gitBranch={gitBranch}
-            currentDirectory={currentDirectory}
-          />
+          {paneInputMode === "editor" && (
+            <InputEditor
+              onSubmit={handleSubmit}
+              onRequestCompletion={requestCompletion}
+              onCheckCommandExists={(cmd) =>
+                invoke<boolean>("check_command_exists", { command: cmd })
+              }
+              onCheckPathExists={(path) =>
+                invoke<boolean>("check_path_exists", { path, cwd: currentDirectory ?? "/" })
+              }
+              disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
+              busy={!!runningBlock}
+              gitBranch={gitBranch}
+              currentDirectory={currentDirectory}
+            />
+          )}
+          {paneInputMode === "running-control" && runningBlock && (
+            <RunningCommandBar
+              command={blocks.find((b) => b.id === runningBlock.blockId)?.command ?? ""}
+              runningBlock={runningBlock}
+              onControlInput={sendControlInput}
+              onFocus={onFocus}
+              isFocused={isFocused}
+              gitBranch={gitBranch}
+            />
+          )}
         </>
       )}
       <div className={`pane-fullscreen-shell ${isFullscreenTerminalActive ? "visible" : "hidden"}`}>
