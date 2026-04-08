@@ -474,12 +474,6 @@ export function InputEditor({
       <span className="input-prompt">
         ${gitBranch ? <span className="git-branch"> ({gitBranch})</span> : ""}
       </span>
-      {busy && (
-        <span className="input-busy-indicator">
-          <span className="running-dot" />
-          Command running...
-        </span>
-      )}
       <div className="input-editor-container" ref={containerRef}>
         {completionState.open && (
           <div className="completion-menu" role="listbox" aria-label="Completion suggestions">
@@ -499,6 +493,12 @@ export function InputEditor({
           </div>
         )}
       </div>
+      {busy && (
+        <span className="input-busy-indicator">
+          <span className="running-dot" />
+          Command running...
+        </span>
+      )}
     </div>
   );
 }
