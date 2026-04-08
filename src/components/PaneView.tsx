@@ -50,6 +50,8 @@ export function PaneView({
     nextSearchResult,
     prevSearchResult,
     clearSearch,
+    // Running block
+    runningBlock,
   } = useTerminalSession(paneId, sessionId);
 
   // Search overlay visibility state (local to each pane)
@@ -239,6 +241,7 @@ export function PaneView({
             onToggleCollapse={toggleBlockCollapse}
             searchResults={searchResults}
             currentSearchIndex={currentSearchIndex}
+            runningBlock={runningBlock}
           />
           <InputEditor
             onSubmit={handleSubmit}
@@ -250,6 +253,7 @@ export function PaneView({
               invoke<boolean>("check_path_exists", { path, cwd: currentDirectory ?? "/" })
             }
             disabled={!isFocused || isFullscreenTerminalActive || !isInputReady}
+            busy={!!runningBlock}
             gitBranch={gitBranch}
             currentDirectory={currentDirectory}
           />

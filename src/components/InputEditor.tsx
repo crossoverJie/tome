@@ -18,6 +18,7 @@ interface InputEditorProps {
   onCheckCommandExists?: CheckCommandExists;
   onCheckPathExists?: CheckPathExists;
   disabled?: boolean;
+  busy?: boolean;
   gitBranch?: string | null;
   currentDirectory?: string | null;
 }
@@ -44,6 +45,7 @@ export function InputEditor({
   onCheckCommandExists,
   onCheckPathExists,
   disabled,
+  busy,
   gitBranch,
   currentDirectory,
 }: InputEditorProps) {
@@ -468,10 +470,16 @@ export function InputEditor({
   );
 
   return (
-    <div className={`input-editor ${disabled ? "disabled" : ""}`}>
+    <div className={`input-editor ${disabled ? "disabled" : ""} ${busy ? "busy" : ""}`}>
       <span className="input-prompt">
         ${gitBranch ? <span className="git-branch"> ({gitBranch})</span> : ""}
       </span>
+      {busy && (
+        <span className="input-busy-indicator">
+          <span className="running-dot" />
+          Command running...
+        </span>
+      )}
       <div className="input-editor-container" ref={containerRef}>
         {completionState.open && (
           <div className="completion-menu" role="listbox" aria-label="Completion suggestions">

@@ -7,6 +7,7 @@ export interface Tab {
   rootPaneId: string;
   panes: Map<string, PaneNode>;
   focusedPaneId: string | null;
+  busyCommand?: string | null;
 }
 
 export function createTab(tabId: string, paneId: string): Tab {

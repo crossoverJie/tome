@@ -180,13 +180,152 @@ body {
   font-size: 13px;
 }
 
-/* Search Highlight */
-.search-highlight {
-  background: rgba(124, 124, 255, 0.3);
-  border-radius: 2px;
+/* Running Block Styles */
+.block-running {
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(
+    90deg,
+    rgba(124, 124, 255, 0.08) 0%,
+    transparent 100%
+  );
 }
 
-.search-highlight-active {
+.block-running-indicator {
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+}
+
+.running-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+}
+
+.block-status {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.block-duration.running {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* Sticky running block header */
+.block-sticky {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Input area busy state */
+.input-editor.busy {
+  opacity: 0.7;
+}
+
+.input-busy-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 12px;
+  color: var(--accent);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.input-busy-indicator .running-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Tab busy indicator */
+.tab-item.busy::before {
+  content: "●";
+  color: var(--accent);
+  font-size: 8px;
+  margin-right: 6px;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* Block List Sticky Header */
+.block-list-sticky-header {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  z-index: 100;
+  transition: all 0.2s ease;
+}
+
+.block-list-sticky-header:hover {
+  background: var(--bg-block-hover);
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.sticky-indicator {
+  color: var(--accent);
+  font-size: 8px;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.sticky-command {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sticky-status {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.search-highlight {
   background: rgba(124, 124, 255, 0.6);
   border-radius: 2px;
   box-shadow: 0 0 0 1px var(--accent);

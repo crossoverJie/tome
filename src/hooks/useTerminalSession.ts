@@ -40,6 +40,16 @@ export interface Block {
 
 type Phase = "prompt" | "input" | "running" | "idle";
 
+// Running block status state machine
+export type RunningBlockStatus =
+  | "starting"      // Just started, no output yet
+  | "running_silent" // No output for threshold period
+  | "streaming"     // Actively receiving output
+  | "quiet";        // No new output for a while (but still running)
+
+// Constants for status transitions
+const SILENCE_THRESHOLD_MS = 2000;  // Time before considering command "quiet"
+
 export interface SearchResult {
   blockId: string;
   blockIndex: number;
@@ -60,6 +70,14 @@ function isEnvAssignment(token: string): boolean {
 interface RawOutputSnapshot {
   rawOutput: string;
   rawOutputBaseOffset: number;
+}
+
+export interface RunningBlockState {
+  blockId: string | null;
+  status: RunningBlockStatus;
+  lastOutputAt: number;
+  silenceMs: number;
+  hasInlineProgress: boolean;
 }
 
 function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | null {
@@ -155,6 +173,9 @@ interface UseTerminalSessionReturn {
   nextSearchResult: () => void;
   prevSearchResult: () => void;
   clearSearch: () => void;
+  // Running block state
+  runningBlock: RunningBlockState | null;
+  hasRunningCommand: boolean;
 }
 
 const INITIAL_INPUT_READY_FALLBACK_MS = 150;
@@ -226,6 +247,11 @@ export function useTerminalSession(
   const inputReadyFallbackRef = useRef<number | null>(null);
   const currentDirectoryRef = useRef(persistedState?.currentDirectory || null);
   const gitBranchRef = useRef(persistedState?.gitBranch || null);
+  // Running block state
+  const [runningBlock, setRunningBlock] = useState<RunningBlockState | null>(null);
+  const runningBlockRef = useRef<RunningBlockState | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const hasRunningCommand = runningBlock !== null;
   const isFullscreenTerminalActive = isFullscreenSessionActive(fullscreenSession);
   const isAlternateScreen = fullscreenSession.mode === "alternate" && isFullscreenTerminalActive;
   const isInteractiveCommandActive =
@@ -276,8 +302,8 @@ export function useTerminalSession(
   ]);
 
   useEffect(() => {
-    fullscreenSessionRef.current = fullscreenSession;
-  }, [fullscreenSession]);
+    runningBlockRef.current = runningBlock;
+  }, [runningBlock]);
 
   useEffect(() => {
     rawOutputBaseOffsetRef.current = rawOutputBaseOffset;
@@ -560,6 +586,21 @@ export function useTerminalSession(
                 return;
               }
 
+              // Update running block state on output
+              const currentRunning = runningBlockRef.current;
+              if (currentRunning) {
+                const now = Date.now();
+                // Check for inline progress (carriage return)
+                const hasInlineProgress = data.includes('\r') || currentRunning.hasInlineProgress;
+                setRunningBlock({
+                  ...currentRunning,
+                  status: "streaming",
+                  lastOutputAt: now,
+                  silenceMs: 0,
+                  hasInlineProgress,
+                });
+              }
+
               setBlocks((prev) => {
                 const last = prev[prev.length - 1];
                 if (last && !last.isComplete) {
@@ -603,6 +644,36 @@ export function useTerminalSession(
                   pendingClaudeLaunchRef.current = null;
                   pendingCommandRef.current = "";
                   const id = `block-${++blockIdCounter.current}`;
+                  const now = Date.now();
+                  // Initialize running block state
+                  const newRunningBlock: RunningBlockState = {
+                    blockId: id,
+                    status: "starting",
+                    lastOutputAt: now,
+                    silenceMs: 0,
+                    hasInlineProgress: false,
+                  };
+                  setRunningBlock(newRunningBlock);
+                  runningBlockRef.current = newRunningBlock;
+                  // Start silence timer
+                  if (silenceTimerRef.current) {
+                    window.clearInterval(silenceTimerRef.current);
+                  }
+                  silenceTimerRef.current = window.setInterval(() => {
+                    const current = runningBlockRef.current;
+                    if (current && current.blockId === id) {
+                      const silence = Date.now() - current.lastOutputAt;
+                      let newStatus = current.status;
+                      if (silence >= SILENCE_THRESHOLD_MS && current.status === "streaming") {
+                        newStatus = "quiet";
+                      }
+                      setRunningBlock({
+                        ...current,
+                        silenceMs: silence,
+                        status: newStatus,
+                      });
+                    }
+                  }, 500);
                   setBlocks((prev) => [
                     ...prev,
                     {
@@ -610,7 +681,7 @@ export function useTerminalSession(
                       command: cmd,
                       output: "",
                       exitCode: null,
-                      startTime: Date.now(),
+                      startTime: now,
                       endTime: null,
                       isComplete: false,
                       isCollapsed: false,
@@ -627,6 +698,13 @@ export function useTerminalSession(
                 case "command_end":
                   phaseRef.current = "idle";
                   pendingClaudeLaunchRef.current = null;
+                  // Clear running block state and timer
+                  if (silenceTimerRef.current) {
+                    window.clearInterval(silenceTimerRef.current);
+                    silenceTimerRef.current = null;
+                  }
+                  setRunningBlock(null);
+                  runningBlockRef.current = null;
                   scheduleRawOutputPublish(true);
                   applyFullscreenEvent({
                     type: "fullscreen-session-ended",
@@ -947,5 +1025,8 @@ export function useTerminalSession(
     nextSearchResult,
     prevSearchResult,
     clearSearch,
+    // Running block state
+    runningBlock,
+    hasRunningCommand,
   };
 }
