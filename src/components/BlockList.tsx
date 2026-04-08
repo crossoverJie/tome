@@ -72,15 +72,16 @@ export function BlockList({
 
     const container = containerRef.current;
     const handleScroll = () => {
-      if (runningBlockIndex === blocks.length - 1) {
-        // Running block is the last one
-        const runningEl = container.children[runningBlockIndex] as HTMLElement | undefined;
-        if (runningEl) {
-          const rect = runningEl.getBoundingClientRect();
-          const containerRect = container.getBoundingClientRect();
-          // Show sticky if running block bottom is above container bottom
-          setShowStickyHeader(rect.bottom < containerRect.bottom - 100);
-        }
+      const runningEl = container.children[runningBlockIndex] as HTMLElement | undefined;
+      if (runningEl) {
+        const rect = runningEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        // Show sticky if running block is above the visible area
+        // (its bottom is above the container's top + some margin)
+        const isScrolledOut = rect.bottom < containerRect.top + 100;
+        // Or if it's below the visible area
+        const isBelowVisible = rect.top > containerRect.bottom - 50;
+        setShowStickyHeader(isScrolledOut || isBelowVisible);
       }
     };
 
