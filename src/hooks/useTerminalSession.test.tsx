@@ -223,7 +223,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isInteractiveCommandActive).toBe(true);
-    expect(result.current.interactiveCommandKind).toBe("claude");
+    expect(result.current.aiAgentKind).toBe("claude");
     expect(result.current.isFullscreenTerminalActive).toBe(true);
     expect(result.current.fullscreenOutputStart).toBe(preClaudeOutputLength);
     expect(invokeMock).not.toHaveBeenCalledWith("write_input", {
@@ -305,7 +305,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isInteractiveCommandActive).toBe(false);
-    expect(result.current.interactiveCommandKind).toBeNull();
+    expect(result.current.aiAgentKind).toBeNull();
     expect(result.current.isFullscreenTerminalActive).toBe(false);
     const completedBlock = result.current.blocks[result.current.blocks.length - 1];
     expect(completedBlock?.isComplete).toBe(true);
@@ -347,7 +347,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isInteractiveCommandActive).toBe(true);
-    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.aiAgentKind).toBe("copilot");
     expect(result.current.isFullscreenTerminalActive).toBe(true);
     expect(result.current.fullscreenOutputStart).toBe(preCopilotOutputLength);
     expect(invokeMock).not.toHaveBeenCalledWith("write_input", {
@@ -389,7 +389,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isInteractiveCommandActive).toBe(true);
-    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.aiAgentKind).toBe("copilot");
     expect(result.current.isFullscreenTerminalActive).toBe(true);
     expect(invokeMock).not.toHaveBeenCalledWith("write_input", {
       sessionId: "session-1",
@@ -441,7 +441,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isFullscreenTerminalActive).toBe(true);
-    expect(result.current.interactiveCommandKind).toBe("copilot");
+    expect(result.current.aiAgentKind).toBe("copilot");
     expect(result.current.isAlternateScreen).toBe(true);
   });
 
@@ -483,7 +483,7 @@ describe("useTerminalSession", () => {
     });
 
     expect(result.current.isInteractiveCommandActive).toBe(true);
-    expect(result.current.interactiveCommandKind).toBe("claude");
+    expect(result.current.aiAgentKind).toBe("claude");
     expect(result.current.isFullscreenTerminalActive).toBe(true);
   });
 

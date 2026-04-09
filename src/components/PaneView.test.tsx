@@ -38,7 +38,7 @@ function buildHookState() {
     isInputReady: true,
     isAlternateScreen: false,
     isInteractiveCommandActive: false,
-    interactiveCommandKind: null,
+    aiAgentKind: null,
     isFullscreenTerminalActive: false,
     fullscreenOutputStart: 0,
     fullscreenSession: createFullscreenSessionState(),
@@ -101,7 +101,7 @@ describe("PaneView", () => {
       ...buildHookState(),
       isInteractiveCommandActive: true,
       isFullscreenTerminalActive: true,
-      interactiveCommandKind: "claude",
+      aiAgentKind: "claude",
       fullscreenOutputStart: 12,
     });
 
@@ -127,7 +127,7 @@ describe("PaneView", () => {
       ...buildHookState(),
       isInteractiveCommandActive: true,
       isFullscreenTerminalActive: true,
-      interactiveCommandKind: "copilot",
+      aiAgentKind: "copilot",
       fullscreenOutputStart: 8,
     });
 

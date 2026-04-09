@@ -27,7 +27,8 @@ describe("sessionState pane init options", () => {
       blocks: [],
       isAlternateScreen: false,
       isInteractiveCommandActive: false,
-      interactiveCommandKind: null,
+      interactiveSessionKind: null,
+      aiAgentKind: null,
       fullscreenOutputStart: 0,
       fullscreenSession: createFullscreenSessionState(),
       rawOutputBaseOffset: 0,
@@ -38,19 +39,22 @@ describe("sessionState pane init options", () => {
 
     updateSessionState("session-1", {
       isInteractiveCommandActive: true,
-      interactiveCommandKind: "claude",
+      interactiveSessionKind: "ai",
+      aiAgentKind: "claude",
       fullscreenOutputStart: 42,
       fullscreenSession: {
         ...createFullscreenSessionState(),
         mode: "interactive",
         lifecycle: "active",
-        commandKind: "claude",
+        sessionKind: "ai",
+        aiAgentKind: "claude",
         startOffset: 42,
       },
     });
 
     expect(getSessionState("session-1")?.isInteractiveCommandActive).toBe(true);
-    expect(getSessionState("session-1")?.interactiveCommandKind).toBe("claude");
+    expect(getSessionState("session-1")?.interactiveSessionKind).toBe("ai");
+    expect(getSessionState("session-1")?.aiAgentKind).toBe("claude");
     expect(getSessionState("session-1")?.fullscreenOutputStart).toBe(42);
     expect(getSessionState("session-1")?.fullscreenSession.mode).toBe("interactive");
   });

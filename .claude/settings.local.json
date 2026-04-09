@@ -40,7 +40,8 @@
       "WebFetch(domain:github.com)",
       "WebSearch",
       "Bash(git fetch:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(find docs:*)"
     ]
   }
 }

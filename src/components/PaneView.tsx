@@ -29,7 +29,7 @@ export function PaneView({
     blocks,
     isInputReady,
     isFullscreenTerminalActive,
-    interactiveCommandKind,
+    aiAgentKind,
     fullscreenOutputStart,
     rawOutputBaseOffset,
     getRawOutputSnapshot,
@@ -66,12 +66,11 @@ export function PaneView({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
   const latestPaneSnapshotRef = useRef<Record<string, unknown> | null>(null);
-  const fullscreenSessionLabel =
-    interactiveCommandKind === "claude"
-      ? "Claude"
-      : interactiveCommandKind === "copilot"
-        ? "Copilot"
-        : "Terminal";
+  const fullscreenSessionLabel = aiAgentKind === "claude"
+    ? "Claude"
+    : aiAgentKind === "copilot"
+      ? "Copilot"
+      : "Interactive";
   const fullscreenPaneTitle = getDirectoryLabel(currentDirectory);
   const createPaneDiagnosticsSnapshot = useCallback(
     (reason: string) => ({
@@ -80,7 +79,7 @@ export function PaneView({
       sessionId: activeSessionId,
       isFocused,
       isFullscreenTerminalActive,
-      interactiveCommandKind,
+      aiAgentKind,
       blockCount: blocks.length,
       selectedBlockIndex,
       rawOutputBaseOffset,
@@ -92,7 +91,7 @@ export function PaneView({
       blocks.length,
       currentDirectory,
       fullscreenOutputStart,
-      interactiveCommandKind,
+      aiAgentKind,
       isFocused,
       isFullscreenTerminalActive,
       paneId,
@@ -326,7 +325,7 @@ export function PaneView({
             onReady={notifyFullscreenReady}
             getRawOutputSnapshot={getRawOutputSnapshot}
             subscribeToRawOutput={subscribeToRawOutput}
-            interactiveCommandKind={interactiveCommandKind}
+            aiAgentKind={aiAgentKind}
           />
         </div>
       </div>

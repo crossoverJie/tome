@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { getRootDiagnosticsSnapshot, logDiagnostics } from "../utils/diagnostics";
+import type { AiAgentKind } from "../utils/fullscreenSessionState";
 import "@xterm/xterm/css/xterm.css";
 
 const FULLSCREEN_SCROLLBACK_LINES = 1000;
@@ -348,17 +349,17 @@ function getTerminalClickCoords(
 }
 
 function isAiAgentFullscreenInput(
-  interactiveCommandKind: "claude" | "copilot" | null | undefined
-): interactiveCommandKind is "claude" | "copilot" {
-  return interactiveCommandKind === "claude" || interactiveCommandKind === "copilot";
+  aiAgentKind: AiAgentKind | null | undefined
+): aiAgentKind is "claude" | "copilot" {
+  return aiAgentKind === "claude" || aiAgentKind === "copilot";
 }
 
 function shouldForwardTextareaInput(
   event: InputEvent,
-  interactiveCommandKind: "claude" | "copilot" | null | undefined
+  aiAgentKind: AiAgentKind | null | undefined
 ): boolean {
   const inputData = event.data;
-  if (!isAiAgentFullscreenInput(interactiveCommandKind) || !inputData || event.isComposing) {
+  if (!isAiAgentFullscreenInput(aiAgentKind) || !inputData || event.isComposing) {
     return false;
   }
 
@@ -381,7 +382,7 @@ interface FullscreenTerminalProps {
   onReady: (cols: number, rows: number) => void;
   rawOutput?: string;
   subscribeToRawOutput?: (listener: () => void) => () => void;
-  interactiveCommandKind?: "claude" | "copilot" | null;
+  aiAgentKind?: AiAgentKind;
 }
 
 export function FullscreenTerminal({
@@ -396,7 +397,7 @@ export function FullscreenTerminal({
   onReady,
   rawOutput = "",
   subscribeToRawOutput,
-  interactiveCommandKind = null,
+  aiAgentKind = null,
 }: FullscreenTerminalProps) {
   const claudeRetryBudget = 24;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -444,10 +445,10 @@ export function FullscreenTerminal({
       terminalRows: terminalRef.current?.rows ?? null,
       containerWidth: containerRef.current?.clientWidth ?? null,
       containerHeight: containerRef.current?.clientHeight ?? null,
-      interactiveCommandKind,
+      aiAgentKind: aiAgentKind,
       ...getRootDiagnosticsSnapshot(),
     }),
-    [interactiveCommandKind, sessionId, startOffset, visible]
+    [aiAgentKind, sessionId, startOffset, visible]
   );
 
   const readRawOutputSnapshot = useCallback(
@@ -665,10 +666,10 @@ export function FullscreenTerminal({
       }
 
       const sequence =
-        interactiveCommandKind === "claude"
+        aiAgentKind === "claude"
           ? null
           : getMoveToCellSequenceForClick(terminal, coords.row, coords.col);
-      if (sequence && interactiveCommandKind !== "claude") {
+      if (sequence && aiAgentKind !== "claude") {
         onData(sequence);
         return;
       }
@@ -677,9 +678,9 @@ export function FullscreenTerminal({
         sessionId,
         row: coords.row,
         col: coords.col,
-        staged: interactiveCommandKind === "claude",
+        staged: aiAgentKind === "claude",
       }).then(() => {
-        if (interactiveCommandKind === "claude") {
+        if (aiAgentKind === "claude") {
           scheduleClaudeCursorCorrection(claudeRetryBudget);
           return;
         }
@@ -688,7 +689,7 @@ export function FullscreenTerminal({
       });
     },
     [
-      interactiveCommandKind,
+      aiAgentKind,
       onData,
       requestCursorProbe,
       scheduleClaudeCursorCorrection,
@@ -828,7 +829,7 @@ export function FullscreenTerminal({
       if (
         event.shiftKey &&
         event.key === "Enter" &&
-        isAiAgentFullscreenInput(interactiveCommandKind)
+        isAiAgentFullscreenInput(aiAgentKind)
       ) {
         onData("\x1b[13;2u");
         return false;
@@ -844,7 +845,7 @@ export function FullscreenTerminal({
       const textarea = containerRef.current?.querySelector("textarea");
       if (textarea) {
         const keydownHandler = (e: KeyboardEvent): void => {
-          if (!isAiAgentFullscreenInput(interactiveCommandKind)) {
+          if (!isAiAgentFullscreenInput(aiAgentKind)) {
             return;
           }
 
@@ -863,7 +864,7 @@ export function FullscreenTerminal({
         };
         const inputHandler = (e: Event): void => {
           if (!(e instanceof InputEvent)) return;
-          const shouldForward = shouldForwardTextareaInput(e, interactiveCommandKind);
+          const shouldForward = shouldForwardTextareaInput(e, aiAgentKind);
           if (!shouldForward) return;
 
           const inputData = e.data;
@@ -942,7 +943,7 @@ export function FullscreenTerminal({
     flushPendingWrites,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
-    interactiveCommandKind,
+    aiAgentKind,
     requestCursorProbe,
     sessionId,
   ]);
