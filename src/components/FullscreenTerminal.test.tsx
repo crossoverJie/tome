@@ -875,4 +875,87 @@ describe("FullscreenTerminal", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
   });
+
+  it("accepts codex as AI agent for fullscreen input handling", () => {
+    const onData = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind="codex"
+      />
+    );
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "Enter",
+      shiftKey: true,
+      metaKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
+  });
+
+  it("uses direct cursor policy for codex (not staged like claude)", () => {
+    terminalMocks.buffer.active.cursorX = 10;
+    terminalMocks.buffer.active.cursorY = 4;
+
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind="codex"
+      />
+    );
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
+      width: 800,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    terminalMocks.invoke.mockClear();
+    onData.mockClear();
+
+    act(() => {
+      terminalElement.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+      );
+      terminalElement.dispatchEvent(
+        new MouseEvent("mouseup", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+      );
+    });
+
+    // Codex uses direct cursor policy (staged: false), not staged like Claude
+    // For direct policy, it sends the cursor movement sequence directly via onData
+    // instead of calling the backend invoke
+    expect(terminalMocks.invoke).not.toHaveBeenCalled();
+    expect(onData).toHaveBeenCalled();
+  });
 });

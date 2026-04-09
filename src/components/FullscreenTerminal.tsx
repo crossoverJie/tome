@@ -350,8 +350,14 @@ function getTerminalClickCoords(
 
 function isAiAgentFullscreenInput(
   aiAgentKind: AiAgentKind | null | undefined
-): aiAgentKind is "claude" | "copilot" {
-  return aiAgentKind === "claude" || aiAgentKind === "copilot";
+): aiAgentKind is "claude" | "copilot" | "codex" {
+  return aiAgentKind === "claude" || aiAgentKind === "copilot" || aiAgentKind === "codex";
+}
+
+function getAiAgentCursorPolicy(aiAgentKind: AiAgentKind | null | undefined): "staged" | "direct" {
+  // Claude uses a staged cursor policy with retry-based correction
+  // Other AI agents (copilot, codex) use direct cursor movement
+  return aiAgentKind === "claude" ? "staged" : "direct";
 }
 
 function shouldForwardTextareaInput(
@@ -665,11 +671,12 @@ export function FullscreenTerminal({
         return;
       }
 
+      const cursorPolicy = getAiAgentCursorPolicy(aiAgentKind);
       const sequence =
-        aiAgentKind === "claude"
+        cursorPolicy === "staged"
           ? null
           : getMoveToCellSequenceForClick(terminal, coords.row, coords.col);
-      if (sequence && aiAgentKind !== "claude") {
+      if (sequence && cursorPolicy === "direct") {
         onData(sequence);
         return;
       }
@@ -678,9 +685,9 @@ export function FullscreenTerminal({
         sessionId,
         row: coords.row,
         col: coords.col,
-        staged: aiAgentKind === "claude",
+        staged: cursorPolicy === "staged",
       }).then(() => {
-        if (aiAgentKind === "claude") {
+        if (cursorPolicy === "staged") {
           scheduleClaudeCursorCorrection(claudeRetryBudget);
           return;
         }
@@ -688,14 +695,7 @@ export function FullscreenTerminal({
         window.setTimeout(() => requestCursorProbe(false), 16);
       });
     },
-    [
-      aiAgentKind,
-      onData,
-      requestCursorProbe,
-      scheduleClaudeCursorCorrection,
-      sessionId,
-      visible,
-    ]
+    [aiAgentKind, onData, requestCursorProbe, scheduleClaudeCursorCorrection, sessionId, visible]
   );
 
   const handleTerminalMouseDown = useCallback(
@@ -826,11 +826,7 @@ export function FullscreenTerminal({
         onData("\x05");
         return false;
       }
-      if (
-        event.shiftKey &&
-        event.key === "Enter" &&
-        isAiAgentFullscreenInput(aiAgentKind)
-      ) {
+      if (event.shiftKey && event.key === "Enter" && isAiAgentFullscreenInput(aiAgentKind)) {
         onData("\x1b[13;2u");
         return false;
       }
