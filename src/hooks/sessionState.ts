@@ -1,12 +1,13 @@
 import type { Block } from "./useTerminalSession";
-import type { FullscreenSessionState } from "../utils/fullscreenSessionState";
+import type { FullscreenSessionState, InteractiveSessionKind, AiAgentKind } from "../utils/fullscreenSessionState";
 
 interface SessionState {
   sessionId: string;
   blocks: Block[];
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
-  interactiveCommandKind: "claude" | "copilot" | null;
+  interactiveSessionKind: InteractiveSessionKind | null;
+  aiAgentKind: AiAgentKind;
   fullscreenOutputStart: number;
   fullscreenSession: FullscreenSessionState;
   rawOutputBaseOffset: number;

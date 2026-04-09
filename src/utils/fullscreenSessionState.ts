@@ -1,4 +1,8 @@
-export type InteractiveCommandKind = "claude" | "copilot";
+// Interactive session kind - categorizes commands that need fullscreen terminal input handling
+export type InteractiveSessionKind = "ai" | "repl" | "generic";
+
+// Specific AI agent types (for behavior customization)
+export type AiAgentKind = "claude" | "copilot" | null;
 export type FullscreenMode = "interactive" | "alternate" | null;
 export type FullscreenLifecycle = "inactive" | "activating" | "active" | "resizing";
 export type FullscreenInteractionState = "inactive" | "active";
@@ -6,7 +10,8 @@ export type FullscreenInteractionState = "inactive" | "active";
 export interface FullscreenSessionState {
   mode: FullscreenMode;
   lifecycle: FullscreenLifecycle;
-  commandKind: InteractiveCommandKind | null;
+  sessionKind: InteractiveSessionKind | null;
+  aiAgentKind: AiAgentKind;
   startOffset: number;
   pendingLaunch: boolean;
   hasPaneFocus: boolean;
@@ -15,12 +20,14 @@ export interface FullscreenSessionState {
 export type FullscreenSessionEvent =
   | {
       type: "interactive-command-detected";
-      commandKind: InteractiveCommandKind;
+      sessionKind: InteractiveSessionKind;
+      aiAgentKind: AiAgentKind;
       startOffset: number;
     }
   | {
       type: "interactive-command-started";
-      commandKind: InteractiveCommandKind;
+      sessionKind: InteractiveSessionKind;
+      aiAgentKind: AiAgentKind;
       startOffset: number;
     }
   | { type: "fullscreen-session-ended"; endOffset: number }
@@ -36,7 +43,8 @@ export function createFullscreenSessionState(): FullscreenSessionState {
   return {
     mode: null,
     lifecycle: "inactive",
-    commandKind: null,
+    sessionKind: null,
+    aiAgentKind: null,
     startOffset: 0,
     pendingLaunch: false,
     hasPaneFocus: false,
@@ -63,7 +71,8 @@ export function fullscreenSessionReducer(
         ...state,
         mode: "interactive",
         lifecycle: "activating",
-        commandKind: event.commandKind,
+        sessionKind: event.sessionKind,
+        aiAgentKind: event.aiAgentKind,
         startOffset: event.startOffset,
         pendingLaunch: true,
       };
@@ -72,7 +81,8 @@ export function fullscreenSessionReducer(
         ...state,
         mode: "interactive",
         lifecycle: "active",
-        commandKind: event.commandKind,
+        sessionKind: event.sessionKind,
+        aiAgentKind: event.aiAgentKind,
         startOffset: event.startOffset,
         pendingLaunch: false,
       };
@@ -87,7 +97,8 @@ export function fullscreenSessionReducer(
         ...state,
         mode: "alternate",
         lifecycle: "active",
-        commandKind: state.commandKind,
+        sessionKind: state.sessionKind,
+        aiAgentKind: state.aiAgentKind,
         startOffset: event.startOffset,
         pendingLaunch: false,
       };

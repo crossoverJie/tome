@@ -11,13 +11,15 @@ describe("fullscreenSessionState", () => {
 
     const next = fullscreenSessionReducer(initial, {
       type: "interactive-command-detected",
-      commandKind: "claude",
+      sessionKind: "ai",
+      aiAgentKind: "claude",
       startOffset: 12,
     });
 
     expect(next.mode).toBe("interactive");
     expect(next.lifecycle).toBe("activating");
-    expect(next.commandKind).toBe("claude");
+    expect(next.sessionKind).toBe("ai");
+    expect(next.aiAgentKind).toBe("claude");
     expect(next.startOffset).toBe(12);
     expect(next.pendingLaunch).toBe(true);
     expect(getFullscreenInteractionState(next)).toBe("active");
@@ -26,7 +28,8 @@ describe("fullscreenSessionState", () => {
   it("keeps fullscreen active through a pane resize without tearing down", () => {
     const active = fullscreenSessionReducer(createFullscreenSessionState(), {
       type: "interactive-command-started",
-      commandKind: "claude",
+      sessionKind: "ai",
+      aiAgentKind: "claude",
       startOffset: 18,
     });
 
@@ -51,7 +54,8 @@ describe("fullscreenSessionState", () => {
   it("marks a fullscreen split as a local resize instead of tearing the session down", () => {
     const active = fullscreenSessionReducer(createFullscreenSessionState(), {
       type: "interactive-command-started",
-      commandKind: "claude",
+      sessionKind: "ai",
+      aiAgentKind: "claude",
       startOffset: 24,
     });
 
@@ -74,7 +78,8 @@ describe("fullscreenSessionState", () => {
   it("preserves the interactive command kind when an AI session enters alternate screen", () => {
     const interactive = fullscreenSessionReducer(createFullscreenSessionState(), {
       type: "interactive-command-started",
-      commandKind: "copilot",
+      sessionKind: "ai",
+      aiAgentKind: "copilot",
       startOffset: 32,
     });
 
@@ -85,7 +90,44 @@ describe("fullscreenSessionState", () => {
 
     expect(alternate.mode).toBe("alternate");
     expect(alternate.lifecycle).toBe("active");
-    expect(alternate.commandKind).toBe("copilot");
+    expect(alternate.sessionKind).toBe("ai");
+    expect(alternate.aiAgentKind).toBe("copilot");
     expect(alternate.startOffset).toBe(48);
+  });
+
+  it("enters interactive mode for REPL commands like python3", () => {
+    const initial = createFullscreenSessionState();
+
+    const next = fullscreenSessionReducer(initial, {
+      type: "interactive-command-detected",
+      sessionKind: "repl",
+      aiAgentKind: null,
+      startOffset: 10,
+    });
+
+    expect(next.mode).toBe("interactive");
+    expect(next.lifecycle).toBe("activating");
+    expect(next.sessionKind).toBe("repl");
+    expect(next.aiAgentKind).toBeNull();
+    expect(next.startOffset).toBe(10);
+    expect(next.pendingLaunch).toBe(true);
+  });
+
+  it("enters interactive mode for generic TTY commands like psql", () => {
+    const initial = createFullscreenSessionState();
+
+    const next = fullscreenSessionReducer(initial, {
+      type: "interactive-command-started",
+      sessionKind: "generic",
+      aiAgentKind: null,
+      startOffset: 5,
+    });
+
+    expect(next.mode).toBe("interactive");
+    expect(next.lifecycle).toBe("active");
+    expect(next.sessionKind).toBe("generic");
+    expect(next.aiAgentKind).toBeNull();
+    expect(next.startOffset).toBe(5);
+    expect(next.pendingLaunch).toBe(false);
   });
 });

@@ -682,7 +682,7 @@ describe("FullscreenTerminal", () => {
         onResize={onResize}
         onReady={onReady}
         rawOutput={"prompt"}
-        interactiveCommandKind={"claude"}
+        aiAgentKind={"claude"}
       />
     );
 
@@ -733,7 +733,7 @@ describe("FullscreenTerminal", () => {
         onResize={vi.fn()}
         onReady={vi.fn()}
         rawOutput={"hello"}
-        interactiveCommandKind={"claude"}
+        aiAgentKind={"claude"}
       />
     );
 
@@ -787,7 +787,7 @@ describe("FullscreenTerminal", () => {
         onResize={vi.fn()}
         onReady={vi.fn()}
         rawOutput={"hello"}
-        interactiveCommandKind={"claude"}
+        aiAgentKind={"claude"}
       />
     );
 
@@ -819,7 +819,7 @@ describe("FullscreenTerminal", () => {
         onResize={vi.fn()}
         onReady={vi.fn()}
         rawOutput={"hello"}
-        interactiveCommandKind={"claude"}
+        aiAgentKind={"claude"}
       />
     );
 
@@ -851,7 +851,7 @@ describe("FullscreenTerminal", () => {
         onResize={vi.fn()}
         onReady={vi.fn()}
         rawOutput={"hello"}
-        interactiveCommandKind={"claude"}
+        aiAgentKind={"claude"}
       />
     );
 

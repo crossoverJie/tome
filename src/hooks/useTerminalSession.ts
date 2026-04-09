@@ -18,7 +18,8 @@ import {
   isFullscreenSessionActive,
   type FullscreenSessionEvent,
   type FullscreenSessionState,
-  type InteractiveCommandKind,
+  type InteractiveSessionKind,
+  type AiAgentKind,
 } from "../utils/fullscreenSessionState";
 import {
   appendRawOutputChunk,
@@ -82,7 +83,13 @@ export interface RunningBlockState {
   hasInlineProgress: boolean;
 }
 
-function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | null {
+export interface InteractiveCommandDetectionResult {
+  sessionKind: InteractiveSessionKind;
+  aiAgentKind: AiAgentKind;
+}
+
+// Detect if a command needs fullscreen terminal interaction (REPL, AI agents, etc.)
+function detectInteractiveCommand(command: string): InteractiveCommandDetectionResult | null {
   const tokens = tokenizeCommand(command.trim());
   if (tokens.length === 0) {
     return null;
@@ -112,12 +119,13 @@ function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | 
     return null;
   }
 
+  // AI agents (these are always interactive regardless of arguments)
   if (basename === "claude") {
-    return "claude";
+    return { sessionKind: "ai", aiAgentKind: "claude" };
   }
 
   if (basename === "gh" && tokens[index + 1] === "copilot") {
-    return "copilot";
+    return { sessionKind: "ai", aiAgentKind: "copilot" };
   }
 
   if (
@@ -126,7 +134,65 @@ function getInteractiveAiCommandKind(command: string): InteractiveCommandKind | 
     basename === "gh-copilot" ||
     basename === "github-copilot-cli"
   ) {
-    return "copilot";
+    return { sessionKind: "ai", aiAgentKind: "copilot" };
+  }
+
+  // REPL commands - only when invoked without arguments (bare interpreter)
+  // e.g., "python3" is interactive, but "python3 app.py" is not
+  const remainingTokens = tokens.slice(index + 1);
+  const hasArguments = remainingTokens.length > 0;
+
+  if (
+    !hasArguments &&
+    (basename === "python" ||
+      basename === "python3" ||
+      basename === "ipython" ||
+      basename === "ipython3" ||
+      basename === "node" ||
+      basename === "nodejs" ||
+      basename === "bun")
+  ) {
+    return { sessionKind: "repl", aiAgentKind: null };
+  }
+
+  // Other REPLs that are typically interactive-only
+  if (
+    basename === "irb" ||
+    basename === "scala" ||
+    basename === "sbt" ||
+    basename === "ghci" ||
+    basename === "lua" ||
+    basename === "lua5.1" ||
+    basename === "lua5.2" ||
+    basename === "lua5.3" ||
+    basename === "lua5.4" ||
+    basename === "ocaml" ||
+    basename === "ocamlc" ||
+    basename === "guile" ||
+    basename === "racket" ||
+    basename === "sbcl" ||
+    basename === "clisp" ||
+    basename === "lein" ||
+    basename === "clj" ||
+    basename === "nim" ||
+    basename === "fsi"
+  ) {
+    return { sessionKind: "repl", aiAgentKind: null };
+  }
+
+  // Generic interactive TTY commands (database shells, etc.)
+  // Note: intentionally excludes 'dotnet' as it's a command dispatcher
+  // (dotnet build, dotnet test are non-interactive)
+  if (
+    basename === "psql" ||
+    basename === "mysql" ||
+    basename === "sqlite3" ||
+    basename === "redis-cli" ||
+    basename === "mongo" ||
+    basename === "mongosh" ||
+    basename === "rlwrap"
+  ) {
+    return { sessionKind: "generic", aiAgentKind: null };
   }
 
   return null;
@@ -146,7 +212,8 @@ interface UseTerminalSessionReturn {
   isInputReady: boolean;
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
-  interactiveCommandKind: InteractiveCommandKind | null;
+  interactiveSessionKind: InteractiveSessionKind | null;
+  aiAgentKind: AiAgentKind;
   isFullscreenTerminalActive: boolean;
   fullscreenOutputStart: number;
   fullscreenSession: FullscreenSessionState;
@@ -210,7 +277,8 @@ export function useTerminalSession(
   const [fullscreenSession, setFullscreenSession] = useState<FullscreenSessionState>(
     persistedState?.fullscreenSession ?? {
       ...createFullscreenSessionState(),
-      commandKind: persistedState?.interactiveCommandKind ?? null,
+      sessionKind: persistedState?.interactiveSessionKind ?? null,
+      aiAgentKind: persistedState?.aiAgentKind ?? null,
       startOffset: persistedState?.fullscreenOutputStart || 0,
       mode: persistedState?.isAlternateScreen
         ? "alternate"
@@ -261,7 +329,8 @@ export function useTerminalSession(
   const isAlternateScreen = fullscreenSession.mode === "alternate" && isFullscreenTerminalActive;
   const isInteractiveCommandActive =
     fullscreenSession.mode === "interactive" && isFullscreenTerminalActive;
-  const interactiveCommandKind = fullscreenSession.commandKind;
+  const interactiveSessionKind = fullscreenSession.sessionKind;
+  const aiAgentKind = fullscreenSession.aiAgentKind;
   const fullscreenOutputStart = fullscreenSession.startOffset;
   const isFullscreenTerminalActiveRef = useRef(isFullscreenTerminalActive);
   isFullscreenTerminalActiveRef.current = isFullscreenTerminalActive;
@@ -285,7 +354,8 @@ export function useTerminalSession(
         blocks,
         isAlternateScreen,
         isInteractiveCommandActive,
-        interactiveCommandKind,
+        interactiveSessionKind,
+        aiAgentKind,
         fullscreenOutputStart,
         fullscreenSession,
         currentDirectory,
@@ -303,7 +373,8 @@ export function useTerminalSession(
     blocks,
     isAlternateScreen,
     isInteractiveCommandActive,
-    interactiveCommandKind,
+    interactiveSessionKind,
+    aiAgentKind,
     fullscreenOutputStart,
     fullscreenSession,
     isFullscreenTerminalActive,
@@ -377,7 +448,8 @@ export function useTerminalSession(
       isInteractiveCommandActive:
         fullscreenSessionRef.current.mode === "interactive" &&
         isFullscreenSessionActive(fullscreenSessionRef.current),
-      interactiveCommandKind: fullscreenSessionRef.current.commandKind,
+      interactiveSessionKind: fullscreenSessionRef.current.sessionKind,
+      aiAgentKind: fullscreenSessionRef.current.aiAgentKind,
       rawOutputBaseOffset: rawOutputBaseOffsetRef.current,
       rawOutputLength: rawOutputRef.current.length,
       fullscreenOutputStart: fullscreenSessionRef.current.startOffset,
@@ -567,7 +639,8 @@ export function useTerminalSession(
             blocks: [],
             isAlternateScreen: false,
             isInteractiveCommandActive: false,
-            interactiveCommandKind: null,
+            interactiveSessionKind: null,
+            aiAgentKind: null,
             fullscreenOutputStart: 0,
             fullscreenSession: createFullscreenSessionState(),
             rawOutputBaseOffset: 0,
@@ -649,11 +722,12 @@ export function useTerminalSession(
                   phaseRef.current = "running";
                   markInputReady();
                   const cmd = pendingCommandRef.current || currentCommandRef.current;
-                  const nextInteractiveCommandKind = getInteractiveAiCommandKind(cmd);
-                  if (nextInteractiveCommandKind) {
+                  const interactiveDetection = detectInteractiveCommand(cmd);
+                  if (interactiveDetection) {
                     applyFullscreenEvent({
                       type: "interactive-command-started",
-                      commandKind: nextInteractiveCommandKind,
+                      sessionKind: interactiveDetection.sessionKind,
+                      aiAgentKind: interactiveDetection.aiAgentKind,
                       startOffset: getRawOutputEndOffset(),
                     });
                   }
@@ -706,8 +780,9 @@ export function useTerminalSession(
                   logDiagnostics("useTerminalSession", "command-start", {
                     ...createSessionDiagnosticsSnapshot("command-start"),
                     command: cmd,
-                    interactiveCommandActive: nextInteractiveCommandKind !== null,
-                    interactiveCommandKind: nextInteractiveCommandKind,
+                    interactiveCommandActive: interactiveDetection !== null,
+                    interactiveSessionKind: interactiveDetection?.sessionKind ?? null,
+                    aiAgentKind: interactiveDetection?.aiAgentKind ?? null,
                   });
                   break;
                 }
@@ -832,11 +907,12 @@ export function useTerminalSession(
             ...createSessionDiagnosticsSnapshot("send-input-command"),
             command: cmd,
           });
-          const interactiveCommandKind = getInteractiveAiCommandKind(cmd);
-          if (interactiveCommandKind) {
+          const interactiveDetection = detectInteractiveCommand(cmd);
+          if (interactiveDetection) {
             applyFullscreenEvent({
               type: "interactive-command-detected",
-              commandKind: interactiveCommandKind,
+              sessionKind: interactiveDetection.sessionKind,
+              aiAgentKind: interactiveDetection.aiAgentKind,
               startOffset: getRawOutputEndOffset(),
             });
             pendingClaudeLaunchRef.current = data;
@@ -1021,7 +1097,8 @@ export function useTerminalSession(
     isInputReady,
     isAlternateScreen,
     isInteractiveCommandActive,
-    interactiveCommandKind,
+    interactiveSessionKind,
+    aiAgentKind,
     isFullscreenTerminalActive,
     fullscreenOutputStart,
     fullscreenSession,
