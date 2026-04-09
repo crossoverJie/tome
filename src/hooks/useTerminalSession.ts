@@ -119,7 +119,7 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     return null;
   }
 
-  // AI agents
+  // AI agents (these are always interactive regardless of arguments)
   if (basename === "claude") {
     return { sessionKind: "ai", aiAgentKind: "claude" };
   }
@@ -137,15 +137,26 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     return { sessionKind: "ai", aiAgentKind: "copilot" };
   }
 
-  // REPL commands
+  // REPL commands - only when invoked without arguments (bare interpreter)
+  // e.g., "python3" is interactive, but "python3 app.py" is not
+  const remainingTokens = tokens.slice(index + 1);
+  const hasArguments = remainingTokens.length > 0;
+
   if (
-    basename === "python" ||
-    basename === "python3" ||
-    basename === "ipython" ||
-    basename === "ipython3" ||
-    basename === "node" ||
-    basename === "nodejs" ||
-    basename === "bun" ||
+    !hasArguments &&
+    (basename === "python" ||
+      basename === "python3" ||
+      basename === "ipython" ||
+      basename === "ipython3" ||
+      basename === "node" ||
+      basename === "nodejs" ||
+      basename === "bun")
+  ) {
+    return { sessionKind: "repl", aiAgentKind: null };
+  }
+
+  // Other REPLs that are typically interactive-only
+  if (
     basename === "irb" ||
     basename === "scala" ||
     basename === "sbt" ||
@@ -169,7 +180,9 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     return { sessionKind: "repl", aiAgentKind: null };
   }
 
-  // Generic interactive TTY commands
+  // Generic interactive TTY commands (database shells, etc.)
+  // Note: intentionally excludes 'dotnet' as it's a command dispatcher
+  // (dotnet build, dotnet test are non-interactive)
   if (
     basename === "psql" ||
     basename === "mysql" ||
@@ -177,7 +190,6 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     basename === "redis-cli" ||
     basename === "mongo" ||
     basename === "mongosh" ||
-    basename === "dotnet" ||
     basename === "rlwrap"
   ) {
     return { sessionKind: "generic", aiAgentKind: null };
