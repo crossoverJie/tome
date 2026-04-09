@@ -1,5 +1,9 @@
 import type { Block } from "./useTerminalSession";
-import type { FullscreenSessionState, InteractiveSessionKind, AiAgentKind } from "../utils/fullscreenSessionState";
+import type {
+  FullscreenSessionState,
+  InteractiveSessionKind,
+  AiAgentKind,
+} from "../utils/fullscreenSessionState";
 
 interface SessionState {
   sessionId: string;

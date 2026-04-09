@@ -487,6 +487,207 @@ describe("useTerminalSession", () => {
     expect(result.current.isFullscreenTerminalActive).toBe(true);
   });
 
+  it("recognizes codex as interactive AI agent and triggers fullscreen mode", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("codex\n");
+    });
+
+    act(() => {
+      result.current.notifyFullscreenReady(100, 30);
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    expect(result.current.isInteractiveCommandActive).toBe(true);
+    expect(result.current.aiAgentKind).toBe("codex");
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+  });
+
+  it("does not treat codex exec as interactive AI agent", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("codex exec ls\n");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    // codex exec should NOT trigger fullscreen mode
+    expect(result.current.isInteractiveCommandActive).toBe(false);
+    expect(result.current.aiAgentKind).toBe(null);
+    expect(result.current.isFullscreenTerminalActive).toBe(false);
+  });
+
+  it("does not treat codex --help as interactive AI agent", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("codex --help\n");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    // codex --help should NOT trigger fullscreen mode
+    expect(result.current.isInteractiveCommandActive).toBe(false);
+    expect(result.current.aiAgentKind).toBe(null);
+    expect(result.current.isFullscreenTerminalActive).toBe(false);
+  });
+
+  it("does not treat codex completion as interactive AI agent", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("codex completion bash\n");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    // codex completion should NOT trigger fullscreen mode
+    expect(result.current.isInteractiveCommandActive).toBe(false);
+    expect(result.current.aiAgentKind).toBe(null);
+    expect(result.current.isFullscreenTerminalActive).toBe(false);
+  });
+
+  it("recognizes path-qualified codex invocations with env prefixes", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("env OPENAI_API_KEY=test /usr/local/bin/codex\n");
+    });
+
+    act(() => {
+      result.current.notifyFullscreenReady(100, 30);
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    expect(result.current.isInteractiveCommandActive).toBe(true);
+    expect(result.current.aiAgentKind).toBe("codex");
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+  });
+
   it("does not duplicate fullscreen raw output when parsed output also arrives", async () => {
     const { result } = renderHook(() => useTerminalSession("pane-1"));
 

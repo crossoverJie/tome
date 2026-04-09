@@ -2,7 +2,7 @@
 export type InteractiveSessionKind = "ai" | "repl" | "generic";
 
 // Specific AI agent types (for behavior customization)
-export type AiAgentKind = "claude" | "copilot" | null;
+export type AiAgentKind = "claude" | "copilot" | "codex" | null;
 export type FullscreenMode = "interactive" | "alternate" | null;
 export type FullscreenLifecycle = "inactive" | "activating" | "active" | "resizing";
 export type FullscreenInteractionState = "inactive" | "active";

@@ -1306,6 +1306,77 @@ impl OutputParser {
                             return events;
                         }
                     }
+
+                    // Check for DCS (ESC P ... ST), APC (ESC _ ... ST), PM (ESC ^ ... ST)
+                    // These are escaped control strings terminated by ST (ESC \) or BEL
+                    if let Some(rest) = self.buffer.get(i..) {
+                        if let Some((skip, is_complete)) = find_escaped_control_string_end(rest) {
+                            if is_complete {
+                                // Strip the control string silently
+                                if i > output_start {
+                                    events.push(ParsedEvent::Output(
+                                        self.buffer[output_start..i].to_string(),
+                                    ));
+                                }
+                                i += skip;
+                                output_start = i;
+                                continue;
+                            } else {
+                                // Incomplete control string, keep in buffer
+                                if i > output_start {
+                                    events.push(ParsedEvent::Output(
+                                        self.buffer[output_start..i].to_string(),
+                                    ));
+                                }
+                                self.buffer = self.buffer[i..].to_string();
+                                return events;
+                            }
+                        }
+                    }
+
+                    // Check for unknown CSI sequences: ESC [ ... final_byte
+                    // CSI sequences are terminated by a byte in the range 0x40-0x7E (@ to ~)
+                    if let Some(rest) = self.buffer.get(i..) {
+                        if let Some((skip, is_complete)) = find_csi_end(rest) {
+                            if is_complete {
+                                // Check if this is an SGR sequence (ends with 'm')
+                                // SGR sequences (ESC [ ... m) set colors/styles and should be preserved
+                                // for block output rendering (Block.tsx expects ANSI colors)
+                                let csi_content = &rest[2..skip]; // Skip ESC [
+                                let final_byte = csi_content.chars().last();
+                                let is_sgr = final_byte == Some('m');
+
+                                if is_sgr {
+                                    // SGR sequence: keep it in the output
+                                    i += skip;
+                                    continue;
+                                }
+
+                                // Skip non-SGR CSI sequences:
+                                // - Cursor movement: ESC [ ... A/B/C/D
+                                // - Clear screen: ESC [ ... J
+                                // - Clear line: ESC [ ... K
+                                // - Cursor position: ESC [ ... H/f
+                                if i > output_start {
+                                    events.push(ParsedEvent::Output(
+                                        self.buffer[output_start..i].to_string(),
+                                    ));
+                                }
+                                i += skip;
+                                output_start = i;
+                                continue;
+                            } else {
+                                // Incomplete CSI sequence, keep in buffer
+                                if i > output_start {
+                                    events.push(ParsedEvent::Output(
+                                        self.buffer[output_start..i].to_string(),
+                                    ));
+                                }
+                                self.buffer = self.buffer[i..].to_string();
+                                return events;
+                            }
+                        }
+                    }
                 }
             }
             i += 1;
@@ -1330,6 +1401,73 @@ pub(crate) fn find_osc_end(s: &str) -> Option<usize> {
         }
     }
     None
+}
+
+/// Find the end of a CSI sequence (ESC [ ... final_byte).
+/// CSI sequences are terminated by a byte in the range 0x40-0x7E (@ to ~).
+/// Returns (skip_bytes, is_complete) where is_complete indicates if we found a terminator.
+fn find_csi_end(s: &str) -> Option<(usize, bool)> {
+    let bytes = s.as_bytes();
+    if bytes.len() < 2 || bytes[0] != 0x1b || bytes[1] != b'[' {
+        return None; // Not a CSI sequence
+    }
+
+    // Skip ESC [
+    let mut i = 2;
+
+    // CSI sequences can have parameter bytes (0x30-0x3F) and intermediate bytes (0x20-0x2F)
+    // before the final byte (0x40-0x7E)
+    while i < bytes.len() {
+        let b = bytes[i];
+        // Parameter bytes: 0-9, :, ;, <, =, >, ?
+        // Intermediate bytes: space, !, ", #, $, %, &, ', (, ), *, +, ,, -, ., /
+        if (0x30..=0x3F).contains(&b) || (0x20..=0x2F).contains(&b) {
+            i += 1;
+            continue;
+        }
+        // Final byte: @ to ~
+        if (0x40..=0x7E).contains(&b) {
+            return Some((i + 1, true));
+        }
+        // Unexpected byte, not a valid CSI
+        return None;
+    }
+
+    // Incomplete CSI sequence
+    Some((bytes.len(), false))
+}
+
+/// Find the end of an escaped control string (DCS, APC, PM, SOS).
+/// These are: ESC P (DCS), ESC _ (APC), ESC ^ (PM), ESC X (SOS - rare)
+/// Terminated by ST (ESC \) or BEL.
+/// Returns (skip_bytes, is_complete) where is_complete indicates if we found a terminator.
+fn find_escaped_control_string_end(s: &str) -> Option<(usize, bool)> {
+    let bytes = s.as_bytes();
+    if bytes.len() < 2 || bytes[0] != 0x1b {
+        return None; // Not an escape sequence
+    }
+
+    // Check for control string introducers
+    match bytes[1] {
+        b'P' | b'_' | b'^' | b'X' => {
+            // DCS, APC, PM, SOS
+            let mut i = 2;
+            while i < bytes.len() {
+                if bytes[i] == 0x07 {
+                    // BEL terminator
+                    return Some((i + 1, true));
+                }
+                if bytes[i] == 0x1b && bytes.get(i + 1) == Some(&b'\\') {
+                    // ST terminator (ESC \)
+                    return Some((i + 2, true));
+                }
+                i += 1;
+            }
+            // Incomplete control string
+            Some((bytes.len(), false))
+        }
+        _ => None, // Not a control string
+    }
 }
 
 pub(crate) fn parse_osc133(content: &str) -> Option<BlockEventData> {
@@ -1819,5 +1957,142 @@ mod tests {
         let decoded = decoder.decode(&[0xFF, b'a', b'b', b'c']);
 
         assert_eq!(decoded, "�abc");
+    }
+
+    // --- Control sequence filtering tests ---
+
+    #[test]
+    fn parser_strips_unknown_csi_sequences() {
+        let mut parser = OutputParser::new();
+        // CSI ?25h (show cursor) should be stripped
+        let events = parser.parse("before\x1b[?25hafter");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_strips_csi_color_sequences() {
+        let mut parser = OutputParser::new();
+        // SGR color sequences should be PRESERVED (not stripped) for block rendering
+        let events = parser.parse("\x1b[31mred\x1b[0m");
+        assert_eq!(events.len(), 1);
+        // SGR sequences are preserved for Block.tsx ANSI rendering
+        assert_eq!(
+            events[0],
+            ParsedEvent::Output("\x1b[31mred\x1b[0m".to_string())
+        );
+    }
+
+    #[test]
+    fn parser_strips_csi_cursor_movement() {
+        let mut parser = OutputParser::new();
+        // Cursor movement CSI sequences should be stripped
+        // ESC[2A is cursor up 2 lines
+        let events = parser.parse("line\x1b[2Aup");
+        // The CSI sequence should be stripped, leaving "lineup" as a single output
+        // If it's not stripped, we'll see separate Output events
+        let output_text: String = events
+            .iter()
+            .filter_map(|e| match e {
+                ParsedEvent::Output(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(output_text, "lineup");
+    }
+
+    #[test]
+    fn parser_strips_dcs_sequences() {
+        let mut parser = OutputParser::new();
+        // DCS (ESC P ... ST) should be stripped
+        let events = parser.parse("before\x1bPtest\x1b\\after");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_strips_dcs_with_bel_terminator() {
+        let mut parser = OutputParser::new();
+        // DCS with BEL terminator
+        let events = parser.parse("before\x1bPtest\x07after");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_strips_apc_sequences() {
+        let mut parser = OutputParser::new();
+        // APC (ESC _ ... ST) should be stripped
+        let events = parser.parse("before\x1b_test\x1b\\after");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_strips_pm_sequences() {
+        let mut parser = OutputParser::new();
+        // PM (ESC ^ ... ST) should be stripped
+        let events = parser.parse("before\x1b^test\x1b\\after");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0], ParsedEvent::Output("before".to_string()));
+        assert_eq!(events[1], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_handles_incomplete_csi_buffering() {
+        let mut parser = OutputParser::new();
+        // Incomplete CSI sequence - should buffer
+        let events = parser.parse("text\x1b[1");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::Output("text".to_string()));
+
+        // Complete the CSI sequence - ESC[10m is an SGR sequence (should be preserved)
+        let events = parser.parse("0m more");
+        assert_eq!(events.len(), 1);
+        // SGR sequence is preserved
+        assert_eq!(events[0], ParsedEvent::Output("\x1b[10m more".to_string()));
+    }
+
+    #[test]
+    fn parser_handles_incomplete_dcs_buffering() {
+        let mut parser = OutputParser::new();
+        // Incomplete DCS sequence - should buffer
+        let events = parser.parse("text\x1bPpartial");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::Output("text".to_string()));
+
+        // Complete the DCS sequence
+        let events = parser.parse("data\x1b\\after");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0], ParsedEvent::Output("after".to_string()));
+    }
+
+    #[test]
+    fn parser_preserves_osc133_and_633_amidst_control_sequences() {
+        let mut parser = OutputParser::new();
+        // Mix of control sequences and OSC markers
+        // /tmp in base64 is L3RtcA==
+        let events =
+            parser.parse("\x1b[?25h\x1b]133;A\x07\x1b[31mprompt\x1b[0m\x1b]633;P;L3RtcA==\x07");
+
+        // Should have: Block(prompt_start), Output("\x1b[31mprompt\x1b[0m"), CurrentDirectory("/tmp")
+        // Note: ESC[?25h (show cursor) is stripped, but ESC[31m/ESC[0m (SGR colors) are preserved
+        assert_eq!(events.len(), 3);
+        assert_eq!(
+            events[0],
+            ParsedEvent::Block(BlockEventData {
+                event_type: "prompt_start".to_string(),
+                exit_code: None,
+            })
+        );
+        assert_eq!(
+            events[1],
+            ParsedEvent::Output("\x1b[31mprompt\x1b[0m".to_string())
+        );
+        assert_eq!(events[2], ParsedEvent::CurrentDirectory("/tmp".to_string()));
     }
 }

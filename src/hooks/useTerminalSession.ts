@@ -124,6 +124,27 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     return { sessionKind: "ai", aiAgentKind: "claude" };
   }
 
+  // Codex: only interactive when invoked without non-interactive subcommands
+  // Non-interactive subcommands: exec, completion, help, --help, --version, etc.
+  if (basename === "codex") {
+    const remainingTokens = tokens.slice(index + 1);
+    const nonInteractiveSubcommands = new Set([
+      "exec",
+      "completion",
+      "help",
+      "--help",
+      "-h",
+      "--version",
+      "-v",
+    ]);
+    const hasNonInteractiveSubcommand = remainingTokens.some((token) =>
+      nonInteractiveSubcommands.has(token)
+    );
+    if (!hasNonInteractiveSubcommand) {
+      return { sessionKind: "ai", aiAgentKind: "codex" };
+    }
+  }
+
   if (basename === "gh" && tokens[index + 1] === "copilot") {
     return { sessionKind: "ai", aiAgentKind: "copilot" };
   }
