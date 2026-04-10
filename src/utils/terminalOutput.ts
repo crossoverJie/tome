@@ -50,3 +50,18 @@ export function processTerminalOutput(output: string): string {
   // No newlines: return currentLine as-is (may be empty)
   return currentLine;
 }
+
+/**
+ * Append a new terminal output chunk onto the current visible block output.
+ *
+ * Unlike raw output buffers, block output only needs the latest rendered text.
+ * Re-processing the combined visible text preserves previous completed lines
+ * while collapsing carriage-return progress updates in place.
+ */
+export function appendTerminalOutputChunk(currentOutput: string, chunk: string): string {
+  if (chunk.length === 0) {
+    return currentOutput;
+  }
+
+  return processTerminalOutput(currentOutput + chunk);
+}

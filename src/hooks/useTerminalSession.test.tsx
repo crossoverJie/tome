@@ -1114,5 +1114,111 @@ describe("useTerminalSession", () => {
         });
       });
     });
+
+    it("stores only the latest visible inline progress text in the running block", async () => {
+      const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+      await waitFor(() => {
+        expect(result.current.sessionId).toBe("session-1");
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "input_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      act(() => {
+        result.current.sendInput("brew upgrade claude-code\n");
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "block",
+            session_id: "session-1",
+            event_type: "command_start",
+            exit_code: null,
+          },
+        });
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "raw_output",
+            session_id: "session-1",
+            data: "==> Downloading package\n",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "==> Downloading package\n",
+          },
+        });
+      });
+
+      act(() => {
+        terminalEventListener?.({
+          payload: {
+            kind: "raw_output",
+            session_id: "session-1",
+            data: "Downloading 10%\r",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "Downloading 10%\r",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "raw_output",
+            session_id: "session-1",
+            data: "Downloading 50%\r",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "Downloading 50%\r",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "raw_output",
+            session_id: "session-1",
+            data: "Downloading 100%\n",
+          },
+        });
+        terminalEventListener?.({
+          payload: {
+            kind: "output",
+            session_id: "session-1",
+            data: "Downloading 100%\n",
+          },
+        });
+      });
+
+      await waitFor(() => {
+        expect(result.current.blocks[result.current.blocks.length - 1]?.output).toBe(
+          "==> Downloading package\nDownloading 100%\n"
+        );
+      });
+
+      expect(result.current.rawOutput).toContain("Downloading 10%\r");
+      expect(result.current.rawOutput).toContain("Downloading 50%\r");
+      expect(result.current.rawOutput).toContain("Downloading 100%\n");
+    });
   });
 });
