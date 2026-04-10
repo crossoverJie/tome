@@ -688,6 +688,48 @@ describe("useTerminalSession", () => {
     expect(result.current.isFullscreenTerminalActive).toBe(true);
   });
 
+  it("recognizes opencode as interactive AI agent and triggers fullscreen mode", async () => {
+    const { result } = renderHook(() => useTerminalSession("pane-1"));
+
+    await waitFor(() => {
+      expect(result.current.sessionId).toBe("session-1");
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "input_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    act(() => {
+      result.current.sendInput("opencode\n");
+    });
+
+    act(() => {
+      result.current.notifyFullscreenReady(100, 30);
+    });
+
+    act(() => {
+      terminalEventListener?.({
+        payload: {
+          kind: "block",
+          session_id: "session-1",
+          event_type: "command_start",
+          exit_code: null,
+        },
+      });
+    });
+
+    expect(result.current.isInteractiveCommandActive).toBe(true);
+    expect(result.current.aiAgentKind).toBe("opencode");
+    expect(result.current.isFullscreenTerminalActive).toBe(true);
+  });
+
   it("does not duplicate fullscreen raw output when parsed output also arrives", async () => {
     const { result } = renderHook(() => useTerminalSession("pane-1"));
 

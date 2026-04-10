@@ -15,11 +15,13 @@ A lightweight block-based terminal built with Tauri 2 + React + TypeScript.
 
 **Fullscreen Terminal (Claude, Copilot, etc.)**
 
+- Drag — Select text
+- `Cmd+C` — Copy selected text
+- `Option+Click` — Move cursor to position
 - `Cmd+Delete` — Clear current line
 - `Cmd+←` — Jump to beginning of line
 - `Cmd+→` — Jump to end of line
 - `Shift+Enter` — Insert soft newline
-- Mouse click — Move cursor to position
 
 ## Development
 

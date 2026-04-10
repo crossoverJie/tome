@@ -125,6 +125,10 @@ function detectInteractiveCommand(command: string): InteractiveCommandDetectionR
     return { sessionKind: "ai", aiAgentKind: "claude" };
   }
 
+  if (basename === "opencode") {
+    return { sessionKind: "ai", aiAgentKind: "opencode" };
+  }
+
   // Codex: only interactive when invoked without non-interactive subcommands
   // Non-interactive subcommands: exec, completion, help, --help, --version, etc.
   if (basename === "codex") {

@@ -15,6 +15,9 @@ const terminalMocks = vi.hoisted(() => {
   const fit = vi.fn();
   const invoke = vi.fn();
   const attachCustomKeyEventHandler = vi.fn();
+  const hasSelection = vi.fn(() => false);
+  const getSelection = vi.fn(() => "");
+  const clearSelection = vi.fn();
 
   let dataHandler: ((data: string) => void) | undefined;
   let resizeHandler: ((event: { cols: number; rows: number }) => void) | undefined;
@@ -64,10 +67,14 @@ const terminalMocks = vi.hoisted(() => {
       resizeHandler = handler;
     }),
     attachCustomKeyEventHandler,
+    hasSelection,
+    getSelection,
+    clearSelection,
   };
 
   return {
     attachCustomKeyEventHandler,
+    clearSelection,
     buffer,
     bufferService,
     write,
@@ -79,6 +86,8 @@ const terminalMocks = vi.hoisted(() => {
     onData,
     onResize,
     fit,
+    getSelection,
+    hasSelection,
     invoke,
     terminalInstance,
     emitData: (data: string) => dataHandler?.(data),
@@ -125,6 +134,8 @@ vi.mock("@xterm/addon-fit", () => ({
 }));
 
 describe("FullscreenTerminal", () => {
+  const clipboardWriteText = vi.fn();
+
   const getCustomKeyHandler = (): ((event: KeyboardEvent) => boolean) => {
     const handler = terminalMocks.attachCustomKeyEventHandler.mock.calls[0]?.[0];
     expect(handler).toBeTypeOf("function");
@@ -142,9 +153,14 @@ describe("FullscreenTerminal", () => {
     terminalMocks.fit.mockReset();
     terminalMocks.invoke.mockReset();
     terminalMocks.attachCustomKeyEventHandler.mockReset();
+    terminalMocks.hasSelection.mockReset();
+    terminalMocks.getSelection.mockReset();
+    terminalMocks.clearSelection.mockReset();
     terminalMocks.terminalInstance.onData.mockClear();
     terminalMocks.terminalInstance.onResize.mockClear();
     terminalMocks.invoke.mockResolvedValue(undefined);
+    terminalMocks.hasSelection.mockReturnValue(false);
+    terminalMocks.getSelection.mockReturnValue("");
     terminalMocks.buffer.active.type = "normal";
     terminalMocks.buffer.active.cursorX = 0;
     terminalMocks.buffer.active.cursorY = 0;
@@ -160,6 +176,13 @@ describe("FullscreenTerminal", () => {
     resizeObserverMocks.observe.mockClear();
     resizeObserverMocks.disconnect.mockClear();
     vi.stubGlobal("ResizeObserver", resizeObserverMocks.MockResizeObserver);
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: clipboardWriteText,
+      },
+    });
+    clipboardWriteText.mockReset();
+    clipboardWriteText.mockResolvedValue(undefined);
   });
 
   it("starts writing from the provided offset when fullscreen activates", () => {
@@ -610,7 +633,7 @@ describe("FullscreenTerminal", () => {
     });
   });
 
-  it("translates a click into frontend cursor movement first", () => {
+  it("translates an Option+click into frontend cursor movement first", () => {
     terminalMocks.buffer.active.cursorX = 10;
     terminalMocks.buffer.active.cursorY = 4;
 
@@ -649,10 +672,22 @@ describe("FullscreenTerminal", () => {
 
     act(() => {
       terminalElement.dispatchEvent(
-        new MouseEvent("mousedown", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
       );
       terminalElement.dispatchEvent(
-        new MouseEvent("mouseup", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
       );
     });
 
@@ -664,14 +699,11 @@ describe("FullscreenTerminal", () => {
     });
   });
 
-  it("uses backend cursor movement for Claude clicks without changing Copilot behavior", () => {
+  it("does not move the cursor on a plain click in fullscreen mode", () => {
     terminalMocks.buffer.active.cursorX = 10;
     terminalMocks.buffer.active.cursorY = 4;
 
     const onData = vi.fn();
-    const onResize = vi.fn();
-    const onReady = vi.fn();
-
     const { container } = render(
       <FullscreenTerminal
         sessionId={"session-1"}
@@ -679,8 +711,8 @@ describe("FullscreenTerminal", () => {
         isFocused={true}
         startOffset={0}
         onData={onData}
-        onResize={onResize}
-        onReady={onReady}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
         rawOutput={"prompt"}
         aiAgentKind={"claude"}
       />
@@ -708,6 +740,71 @@ describe("FullscreenTerminal", () => {
       );
       terminalElement.dispatchEvent(
         new MouseEvent("mouseup", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+      );
+    });
+
+    expect(onData).not.toHaveBeenCalled();
+    expect(terminalMocks.invoke).not.toHaveBeenCalledWith("move_cursor_to_position", {
+      sessionId: "session-1",
+      row: 5,
+      col: 21,
+      staged: true,
+    });
+  });
+
+  it("uses backend cursor movement for Claude Option+click", () => {
+    terminalMocks.buffer.active.cursorX = 10;
+    terminalMocks.buffer.active.cursorY = 4;
+
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"prompt"}
+        aiAgentKind={"claude"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
+      width: 800,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    terminalMocks.invoke.mockClear();
+    onData.mockClear();
+
+    act(() => {
+      terminalElement.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
+      );
+      terminalElement.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
       );
     });
 
@@ -807,6 +904,40 @@ describe("FullscreenTerminal", () => {
     expect(onData).not.toHaveBeenCalledWith("\n");
   });
 
+  it("does not replay pasted textarea input for Claude fullscreen input fallback", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind={"claude"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    act(() => {
+      textarea.dispatchEvent(
+        new InputEvent("input", { data: "pasted text", inputType: "insertFromPaste" })
+      );
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(onData).not.toHaveBeenCalledWith("pasted text");
+  });
+
   it("still replays IME punctuation text for Claude fullscreen input fallback", () => {
     const onData = vi.fn();
     const { container } = render(
@@ -904,7 +1035,7 @@ describe("FullscreenTerminal", () => {
     expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
   });
 
-  it("uses direct cursor policy for codex (not staged like claude)", () => {
+  it("uses direct cursor policy for codex Option+click (not staged like claude)", () => {
     terminalMocks.buffer.active.cursorX = 10;
     terminalMocks.buffer.active.cursorY = 4;
 
@@ -945,10 +1076,22 @@ describe("FullscreenTerminal", () => {
 
     act(() => {
       terminalElement.dispatchEvent(
-        new MouseEvent("mousedown", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
       );
       terminalElement.dispatchEvent(
-        new MouseEvent("mouseup", { bubbles: true, button: 0, clientX: 205, clientY: 85 })
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          altKey: true,
+          clientX: 205,
+          clientY: 85,
+        })
       );
     });
 
@@ -957,5 +1100,40 @@ describe("FullscreenTerminal", () => {
     // instead of calling the backend invoke
     expect(terminalMocks.invoke).not.toHaveBeenCalled();
     expect(onData).toHaveBeenCalled();
+  });
+
+  it("copies the terminal selection on Cmd+C without forwarding input", async () => {
+    const onData = vi.fn();
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind="codex"
+      />
+    );
+
+    terminalMocks.hasSelection.mockReturnValue(true);
+    terminalMocks.getSelection.mockReturnValue("selected terminal text");
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "c",
+      code: "KeyC",
+      metaKey: true,
+      altKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(clipboardWriteText).toHaveBeenCalledWith("selected terminal text");
+    expect(onData).not.toHaveBeenCalled();
   });
 });
