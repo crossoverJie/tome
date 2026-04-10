@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { processTerminalOutput } from "./terminalOutput";
+import { appendTerminalOutputChunk, processTerminalOutput } from "./terminalOutput";
 
 describe("processTerminalOutput", () => {
   it("handles basic carriage return overwrites", () => {
@@ -101,5 +101,21 @@ describe("processTerminalOutput", () => {
       "Downloading 100%\n" +
       "==> Installing package";
     expect(processTerminalOutput(input)).toBe(expected);
+  });
+});
+
+describe("appendTerminalOutputChunk", () => {
+  it("collapses inline progress updates without losing completed lines", () => {
+    let output = "";
+
+    output = appendTerminalOutputChunk(output, "==> Downloading package\n");
+    output = appendTerminalOutputChunk(output, "Downloading 10%\r");
+    output = appendTerminalOutputChunk(output, "Downloading 50%\r");
+    output = appendTerminalOutputChunk(output, "Downloading 100%\n");
+    output = appendTerminalOutputChunk(output, "==> Installing package\n");
+
+    expect(output).toBe(
+      "==> Downloading package\nDownloading 100%\n==> Installing package\n"
+    );
   });
 });

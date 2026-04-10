@@ -27,6 +27,7 @@ import {
   FULLSCREEN_REPLAY_BUFFER_TRIM_TARGET,
   getRawOutputAbsoluteEnd,
 } from "../utils/rawOutputBuffer";
+import { appendTerminalOutputChunk } from "../utils/terminalOutput";
 
 export interface Block {
   id: string;
@@ -717,7 +718,7 @@ export function useTerminalSession(
                   const updated = [...prev];
                   updated[updated.length - 1] = {
                     ...last,
-                    output: last.output + data,
+                    output: appendTerminalOutputChunk(last.output, data),
                   };
                   return updated;
                 }
