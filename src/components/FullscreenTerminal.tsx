@@ -11,6 +11,17 @@ const FULLSCREEN_WRITE_FLUSH_MS = 16;
 
 interface XtermCoreLike {
   _bufferService?: XtermBufferServiceLike;
+  _selectionService?: {
+    _handleMouseUp?: (event: MouseEvent) => void;
+    _removeMouseDownListeners?: () => void;
+    _activeSelectionMode?: string | number;
+    _dragScrollIntervalTimer?: number;
+    _mouseDownTimeStamp?: number;
+    _model?: {
+      selectionStart?: [number, number];
+      selectionEnd?: [number, number];
+    };
+  };
   _renderService?: {
     dimensions?: {
       css?: {
@@ -348,10 +359,42 @@ function getTerminalClickCoords(
   };
 }
 
+function eventTargetsContainer(
+  event: MouseEvent | PointerEvent,
+  container: HTMLDivElement | null
+): boolean {
+  if (!container) {
+    return false;
+  }
+
+  const target = event.target;
+  return target instanceof Node ? container.contains(target) : false;
+}
+
+function forceEndXtermSelectionDrag(terminal: Terminal | null, event: MouseEvent): void {
+  if (!terminal) {
+    return;
+  }
+
+  const selectionService = (terminal as Terminal & { _core?: XtermCoreLike })._core
+    ?._selectionService;
+  if (selectionService?._handleMouseUp) {
+    selectionService._handleMouseUp(event);
+    return;
+  }
+
+  selectionService?._removeMouseDownListeners?.();
+}
+
 function isAiAgentFullscreenInput(
   aiAgentKind: AiAgentKind | null | undefined
-): aiAgentKind is "claude" | "copilot" | "codex" {
-  return aiAgentKind === "claude" || aiAgentKind === "copilot" || aiAgentKind === "codex";
+): aiAgentKind is "claude" | "copilot" | "codex" | "opencode" {
+  return (
+    aiAgentKind === "claude" ||
+    aiAgentKind === "copilot" ||
+    aiAgentKind === "codex" ||
+    aiAgentKind === "opencode"
+  );
 }
 
 function getAiAgentCursorPolicy(aiAgentKind: AiAgentKind | null | undefined): "staged" | "direct" {
@@ -370,6 +413,10 @@ function shouldForwardTextareaInput(
   }
 
   if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
+    return false;
+  }
+
+  if (event.inputType === "insertFromPaste" || event.inputType === "insertFromPasteAsQuotation") {
     return false;
   }
 
@@ -647,24 +694,29 @@ export function FullscreenTerminal({
         !sessionId ||
         !terminal ||
         !container ||
-        terminal.buffer.active.type === "alternate" ||
+        !eventTargetsContainer(event, container) ||
         event.button !== 0 ||
         !pointerDown
       ) {
         return;
       }
 
-      event.preventDefault();
-      event.stopPropagation();
-      window.getSelection()?.removeAllRanges();
-
       const movedDistance = Math.hypot(
         event.clientX - pointerDown.x,
         event.clientY - pointerDown.y
       );
+
       if (movedDistance > 4) {
         return;
       }
+
+      if (terminal.buffer.active.type === "alternate" || !event.altKey || terminal.hasSelection()) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      window.getSelection()?.removeAllRanges();
 
       const coords = getTerminalClickCoords(terminal, container, event);
       if (!coords) {
@@ -700,22 +752,53 @@ export function FullscreenTerminal({
 
   const handleTerminalMouseDown = useCallback(
     (event: MouseEvent) => {
-      if (
-        !visible ||
-        !sessionId ||
-        !terminalRef.current ||
-        terminalRef.current.buffer.active.type === "alternate" ||
-        event.button !== 0
-      ) {
+      const terminal = terminalRef.current;
+      const container = containerRef.current;
+
+      if (!eventTargetsContainer(event, container)) {
         return;
       }
 
-      event.preventDefault();
-      event.stopPropagation();
+      if (
+        !visible ||
+        !sessionId ||
+        !terminal ||
+        terminal.buffer.active.type === "alternate" ||
+        event.button !== 0
+      ) {
+        pointerDownRef.current = null;
+        return;
+      }
+
       pointerDownRef.current = { x: event.clientX, y: event.clientY };
+
+      if (event.altKey) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     },
     [sessionId, visible]
   );
+
+  const handleTerminalMouseMove = useCallback((event: MouseEvent) => {
+    const terminal = terminalRef.current;
+    const container = containerRef.current;
+    const pointerDown = pointerDownRef.current;
+    if (!terminal || !pointerDown || !eventTargetsContainer(event, container)) {
+      return;
+    }
+
+    if (event.buttons === 0) {
+      pointerDownRef.current = null;
+      forceEndXtermSelectionDrag(terminal, event);
+      return;
+    }
+
+    const movedDistance = Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y);
+    if (movedDistance < 4) {
+      return;
+    }
+  }, []);
 
   useEffect(() => {
     isFocusedRef.current = isFocused;
@@ -814,6 +897,17 @@ export function FullscreenTerminal({
       if (event.type !== "keydown") {
         return true;
       }
+      if (
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "c" &&
+        terminal.hasSelection()
+      ) {
+        void navigator.clipboard.writeText(terminal.getSelection());
+        return false;
+      }
       if (event.metaKey && event.key === "Backspace") {
         onData("\x15");
         return false;
@@ -901,8 +995,9 @@ export function FullscreenTerminal({
     // Start attachment with retry budget
     attachToTextarea(20);
 
-    containerRef.current.addEventListener("mouseup", handleTerminalMouseUp, true);
-    containerRef.current.addEventListener("mousedown", handleTerminalMouseDown, true);
+    document.addEventListener("mouseup", handleTerminalMouseUp, true);
+    document.addEventListener("mousedown", handleTerminalMouseDown, true);
+    document.addEventListener("mousemove", handleTerminalMouseMove, true);
 
     return () => {
       flushPendingWrites("unmount");
@@ -929,14 +1024,16 @@ export function FullscreenTerminal({
       // Reset composing state
       isComposingRef.current = false;
 
-      containerRef.current?.removeEventListener("mouseup", handleTerminalMouseUp, true);
-      containerRef.current?.removeEventListener("mousedown", handleTerminalMouseDown, true);
+      document.removeEventListener("mouseup", handleTerminalMouseUp, true);
+      document.removeEventListener("mousedown", handleTerminalMouseDown, true);
+      document.removeEventListener("mousemove", handleTerminalMouseMove, true);
       terminal.dispose();
     };
   }, [
     clearActivationFrame,
     clearClaudeRetryTimeout,
     flushPendingWrites,
+    handleTerminalMouseMove,
     handleTerminalMouseDown,
     handleTerminalMouseUp,
     aiAgentKind,

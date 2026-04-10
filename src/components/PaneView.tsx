@@ -67,7 +67,15 @@ export function PaneView({
   const paneRef = useRef<HTMLDivElement>(null);
   const latestPaneSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const fullscreenSessionLabel =
-    aiAgentKind === "claude" ? "Claude" : aiAgentKind === "copilot" ? "Copilot" : "Interactive";
+    aiAgentKind === "claude"
+      ? "Claude"
+      : aiAgentKind === "copilot"
+        ? "Copilot"
+        : aiAgentKind === "codex"
+          ? "Codex"
+          : aiAgentKind === "opencode"
+            ? "OpenCode"
+            : "Interactive";
   const fullscreenPaneTitle = getDirectoryLabel(currentDirectory);
   const createPaneDiagnosticsSnapshot = useCallback(
     (reason: string) => ({
