@@ -41,7 +41,15 @@
       "WebSearch",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
-      "Bash(find docs:*)"
+      "Bash(find docs:*)",
+      "Bash(/tmp/pty_temp.rs:*)",
+      "Bash(find /Users/chenjie/Documents/dev/github/tome/src -name *.ts -type f)",
+      "Bash(grep -rn \"output\" /Users/chenjie/Documents/dev/github/tome/src-tauri/src/*.rs)",
+      "Bash(cargo build:*)",
+      "WebFetch(domain:tianqi.baidu.com)",
+      "WebFetch(domain:weather.com)",
+      "WebFetch(domain:r.jina.ai)",
+      "Bash(curl:*)"
     ]
   }
 }
