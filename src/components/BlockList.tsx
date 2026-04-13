@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { Block as BlockComponent } from "./Block";
 import type { Block, SearchResult, RunningBlockState } from "../hooks/useTerminalSession";
+import type { OutputLinkKind } from "../utils/outputLinks";
 
 interface BlockListProps {
   blocks: Block[];
@@ -12,6 +13,12 @@ interface BlockListProps {
   currentSearchIndex: number;
   // Running block
   runningBlock: RunningBlockState | null;
+  onOutputLinkActivate?: (link: {
+    kind: OutputLinkKind;
+    target: string;
+    text: string;
+    metaKey: boolean;
+  }) => void;
 }
 
 export function BlockList({
@@ -22,6 +29,7 @@ export function BlockList({
   searchResults,
   currentSearchIndex,
   runningBlock,
+  onOutputLinkActivate,
 }: BlockListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
@@ -140,6 +148,7 @@ export function BlockList({
             runningStatus={isRunning ? runningBlock?.status : undefined}
             silenceMs={isRunning ? runningBlock?.silenceMs : undefined}
             hasInlineProgress={isRunning ? runningBlock?.hasInlineProgress : undefined}
+            onOutputLinkActivate={onOutputLinkActivate}
           />
         );
       })}

@@ -1,7 +1,7 @@
 mod completion;
 mod pty;
 
-use completion::CompletionResponse;
+use completion::{CompletionResponse, ResolvedPathTarget};
 use pty::PtyManager;
 use std::sync::Arc;
 use tauri::State;
@@ -91,6 +91,11 @@ fn check_path_exists(path: String, cwd: String) -> bool {
     completion::check_path_exists(&path, &cwd)
 }
 
+#[tauri::command]
+fn resolve_path_target(path: String, cwd: String) -> Result<ResolvedPathTarget, String> {
+    completion::resolve_path_target(&path, &cwd)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -109,7 +114,8 @@ pub fn run() {
             report_cursor_position,
             clear_interactive_input_anchor,
             check_command_exists,
-            check_path_exists
+            check_path_exists,
+            resolve_path_target
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

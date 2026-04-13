@@ -1,8 +1,10 @@
 import { useRef, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { getRootDiagnosticsSnapshot, logDiagnostics } from "../utils/diagnostics";
+import { findOutputLinks } from "../utils/outputLinks";
 import type { AiAgentKind } from "../utils/fullscreenSessionState";
 import "@xterm/xterm/css/xterm.css";
 
@@ -359,6 +361,45 @@ function getTerminalClickCoords(
   };
 }
 
+export function getFullscreenUrlLinks(
+  lineText: string,
+  bufferLineNumber: number
+): Array<{
+  text: string;
+  range: {
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+  };
+}> {
+  return findOutputLinks(lineText)
+    .filter((match) => match.kind === "url")
+    .map((match) => ({
+      text: match.text,
+      range: {
+        start: { x: match.start + 1, y: bufferLineNumber },
+        end: { x: match.end, y: bufferLineNumber },
+      },
+    }));
+}
+
+function getFullscreenUrlLinkAtCell(
+  lineText: string,
+  bufferLineNumber: number,
+  col: number
+): {
+  text: string;
+  range: {
+    start: { x: number; y: number };
+    end: { x: number; y: number };
+  };
+} | null {
+  return (
+    getFullscreenUrlLinks(lineText, bufferLineNumber).find(
+      (link) => col >= link.range.start.x && col <= link.range.end.x
+    ) ?? null
+  );
+}
+
 function eventTargetsContainer(
   event: MouseEvent | PointerEvent,
   container: HTMLDivElement | null
@@ -688,13 +729,37 @@ export function FullscreenTerminal({
       const container = containerRef.current;
       const pointerDown = pointerDownRef.current;
       pointerDownRef.current = null;
+      const targetsContainer = eventTargetsContainer(event, container);
+
+      if (
+        visible &&
+        sessionId &&
+        terminal &&
+        container &&
+        targetsContainer &&
+        event.button === 0 &&
+        event.metaKey
+      ) {
+        const coords = getTerminalClickCoords(terminal, container, event);
+        if (coords) {
+          const lineText =
+            terminal.buffer.active.getLine(coords.row - 1)?.translateToString(true) ?? "";
+          const clickedLink = getFullscreenUrlLinkAtCell(lineText, coords.row, coords.col);
+          if (clickedLink) {
+            event.preventDefault();
+            event.stopPropagation();
+            void openUrl(clickedLink.text);
+            return;
+          }
+        }
+      }
 
       if (
         !visible ||
         !sessionId ||
         !terminal ||
         !container ||
-        !eventTargetsContainer(event, container) ||
+        !targetsContainer ||
         event.button !== 0 ||
         !pointerDown
       ) {
@@ -710,6 +775,11 @@ export function FullscreenTerminal({
         return;
       }
 
+      const coords = getTerminalClickCoords(terminal, container, event);
+      if (!coords) {
+        return;
+      }
+
       if (terminal.buffer.active.type === "alternate" || !event.altKey || terminal.hasSelection()) {
         return;
       }
@@ -717,11 +787,6 @@ export function FullscreenTerminal({
       event.preventDefault();
       event.stopPropagation();
       window.getSelection()?.removeAllRanges();
-
-      const coords = getTerminalClickCoords(terminal, container, event);
-      if (!coords) {
-        return;
-      }
 
       const cursorPolicy = getAiAgentCursorPolicy(aiAgentKind);
       const sequence =
@@ -754,8 +819,9 @@ export function FullscreenTerminal({
     (event: MouseEvent) => {
       const terminal = terminalRef.current;
       const container = containerRef.current;
+      const targetsContainer = eventTargetsContainer(event, container);
 
-      if (!eventTargetsContainer(event, container)) {
+      if (!targetsContainer) {
         return;
       }
 
@@ -891,6 +957,79 @@ export function FullscreenTerminal({
 
     terminal.onResize(({ cols, rows }) => {
       onResize(cols, rows);
+    });
+
+    terminal.registerLinkProvider({
+      provideLinks: (bufferLineNumber, callback) => {
+        const buffer = terminal.buffer.active;
+        const lineIndex = bufferLineNumber - 1;
+
+        // Build concatenated text from wrapped lines (current + all previous wrapped lines)
+        let concatenatedText = "";
+        const lineStartIndices: number[] = [];
+        let currentLineIndex = lineIndex;
+
+        // Find the start of the wrapped line group
+        while (currentLineIndex > 0) {
+          const prevLine = buffer.getLine(currentLineIndex - 1);
+          if (!prevLine?.isWrapped) {
+            break;
+          }
+          currentLineIndex--;
+        }
+
+        // Build concatenated text from the start line to current line
+        const startLineIndex = currentLineIndex;
+        while (currentLineIndex <= lineIndex) {
+          lineStartIndices.push(concatenatedText.length);
+          const line = buffer.getLine(currentLineIndex);
+          const lineText = line?.translateToString(true) ?? "";
+          concatenatedText += lineText;
+          currentLineIndex++;
+        }
+
+        // Find all URLs in the concatenated text
+        const allLinks = getFullscreenUrlLinks(concatenatedText, startLineIndex + 1);
+
+        // Filter and adjust links that end on the current line
+        const currentLineStartOffset = lineStartIndices[lineStartIndices.length - 1];
+        const currentLineEndOffset = concatenatedText.length;
+
+        const linksForCurrentLine = allLinks
+          .filter((link) => {
+            // Link must intersect with current line's portion of the text
+            const linkStart = link.range.start.x - 1;
+            const linkEnd = link.range.end.x;
+            return linkEnd > currentLineStartOffset && linkStart < currentLineEndOffset;
+          })
+          .map((link) => {
+            const linkStart = link.range.start.x - 1;
+            const linkEnd = link.range.end.x;
+
+            // Adjust range to be relative to current line
+            const adjustedStart = Math.max(0, linkStart - currentLineStartOffset) + 1;
+            const adjustedEnd = Math.min(
+              linkEnd - currentLineStartOffset,
+              currentLineEndOffset - currentLineStartOffset
+            );
+
+            return {
+              range: {
+                start: { x: adjustedStart, y: bufferLineNumber },
+                end: { x: adjustedEnd, y: bufferLineNumber },
+              },
+              text: link.text,
+              activate: (event: MouseEvent) => {
+                if (!event.metaKey) {
+                  return;
+                }
+                void openUrl(link.text);
+              },
+            };
+          });
+
+        callback(linksForCurrentLine.length > 0 ? linksForCurrentLine : undefined);
+      },
     });
 
     terminal.attachCustomKeyEventHandler((event) => {

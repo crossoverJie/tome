@@ -13,7 +13,8 @@
       "Bash(command -v qrdecode)",
       "Bash(qrdecode /tmp/xhs_qr.png)",
       "Bash(python3:*)",
-      "Bash(jq -r .[0].symbol[0].data)"
+      "Bash(jq -r .[0].symbol[0].data)",
+      "Bash(gh pr:*)"
     ]
   }
 }

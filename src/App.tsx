@@ -16,6 +16,7 @@ function App() {
     activeTabId,
     activeTab,
     createTab,
+    createTabWithCwd,
     closeTab,
     switchTab,
     switchTabByIndex,
@@ -329,6 +330,7 @@ function App() {
             onFocusPane={focusPane}
             onUpdateSplitRatio={updateSplitRatio}
             onWorkingDirectoryChange={handleWorkingDirectoryChange}
+            onOpenPathInNewTab={createTabWithCwd}
           />
         </div>
       ))}

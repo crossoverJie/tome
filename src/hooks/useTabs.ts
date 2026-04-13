@@ -13,6 +13,7 @@ import {
   removePaneMapping,
   removePaneSessionInitOptions,
   removeSessionState,
+  setPaneSessionInitOptions,
 } from "./sessionState";
 
 export interface UseTabsReturn {
@@ -21,6 +22,7 @@ export interface UseTabsReturn {
   activeTabId: string;
   activeTab: Tab;
   createTab: () => void;
+  createTabWithCwd: (initialCwd: string) => void;
   closeTab: (tabId: string) => { shouldCloseWindow: boolean; removedSessionIds: string[] };
   switchTab: (tabId: string) => void;
   switchTabByIndex: (index: number) => void;
@@ -83,6 +85,18 @@ export function useTabs(): UseTabsReturn {
     setTabs((prev) => [...prev, tab]);
     setActiveTabId(tabId);
   }, [generateId]);
+
+  const createTabWithCwd = useCallback(
+    (initialCwd: string) => {
+      const tabId = generateId("tab");
+      const paneId = generateId("pane");
+      const tab = createTabData(tabId, paneId);
+      setPaneSessionInitOptions(paneId, { initialCwd });
+      setTabs((prev) => [...prev, tab]);
+      setActiveTabId(tabId);
+    },
+    [generateId]
+  );
 
   const closeTab = useCallback(
     (tabId: string): { shouldCloseWindow: boolean; removedSessionIds: string[] } => {
@@ -284,6 +298,7 @@ export function useTabs(): UseTabsReturn {
     activeTabId,
     activeTab,
     createTab,
+    createTabWithCwd,
     closeTab,
     switchTab,
     switchTabByIndex,

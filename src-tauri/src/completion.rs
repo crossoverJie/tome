@@ -29,6 +29,14 @@ pub struct CompletionResponse {
     pub items: Vec<CompletionItem>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolvedPathTarget {
+    pub path: String,
+    pub is_directory: bool,
+    pub parent_directory: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CompletionContext {
     replace_from: usize,
@@ -131,6 +139,32 @@ pub fn check_path_exists(path: &str, cwd: &str) -> bool {
     } else {
         Path::new(cwd).join(p).exists()
     }
+}
+
+pub fn resolve_path_target(path: &str, cwd: &str) -> Result<ResolvedPathTarget, String> {
+    let expanded = expand_tilde(path);
+    let candidate = Path::new(&expanded);
+    let resolved = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        Path::new(cwd).join(candidate)
+    };
+
+    let metadata = fs::metadata(&resolved)
+        .map_err(|error| format!("Failed to resolve path '{}': {error}", resolved.display()))?;
+    let normalized = resolved.canonicalize().unwrap_or(resolved);
+    let is_directory = metadata.is_dir();
+    let parent_directory = if is_directory {
+        normalized.clone()
+    } else {
+        normalized.parent().map(Path::to_path_buf).unwrap_or_else(|| PathBuf::from("/"))
+    };
+
+    Ok(ResolvedPathTarget {
+        path: normalized.to_string_lossy().into_owned(),
+        is_directory,
+        parent_directory: parent_directory.to_string_lossy().into_owned(),
+    })
 }
 
 pub fn request_completion(
@@ -605,6 +639,45 @@ mod tests {
 
         let path = format!("~{username}");
         assert!(check_path_exists(&path, "/"));
+    }
+
+    #[test]
+    fn resolve_path_target_returns_parent_for_files() {
+        let temp_root = unique_test_dir();
+        fs::create_dir_all(&temp_root).unwrap();
+        let file_path = temp_root.join("file.txt");
+        fs::write(&file_path, "ok").unwrap();
+        let canonical_file = file_path.canonicalize().unwrap();
+        let canonical_root = temp_root.canonicalize().unwrap();
+
+        let resolved =
+            resolve_path_target(file_path.to_string_lossy().as_ref(), "/").expect("resolved file");
+
+        assert!(!resolved.is_directory);
+        assert_eq!(resolved.path, canonical_file.to_string_lossy());
+        assert_eq!(resolved.parent_directory, canonical_root.to_string_lossy());
+
+        fs::remove_dir_all(&temp_root).unwrap();
+    }
+
+    #[test]
+    fn resolve_path_target_returns_directory_for_directories() {
+        let temp_root = unique_test_dir();
+        let nested = temp_root.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        let canonical_nested = nested.canonicalize().unwrap();
+
+        let resolved =
+            resolve_path_target(nested.to_string_lossy().as_ref(), "/").expect("resolved dir");
+
+        assert!(resolved.is_directory);
+        assert_eq!(resolved.path, canonical_nested.to_string_lossy());
+        assert_eq!(
+            resolved.parent_directory,
+            canonical_nested.to_string_lossy()
+        );
+
+        fs::remove_dir_all(&temp_root).unwrap();
     }
 
     // -----------------------------------------------------------------------

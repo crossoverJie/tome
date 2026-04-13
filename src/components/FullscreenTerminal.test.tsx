@@ -1,7 +1,7 @@
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Terminal } from "@xterm/xterm";
-import { FullscreenTerminal } from "./FullscreenTerminal";
+import { FullscreenTerminal, getFullscreenUrlLinks } from "./FullscreenTerminal";
 
 const terminalMocks = vi.hoisted(() => {
   const write = vi.fn();
@@ -14,6 +14,7 @@ const terminalMocks = vi.hoisted(() => {
   const onResize = vi.fn();
   const fit = vi.fn();
   const invoke = vi.fn();
+  const registerLinkProvider = vi.fn();
   const attachCustomKeyEventHandler = vi.fn();
   const hasSelection = vi.fn(() => false);
   const getSelection = vi.fn(() => "");
@@ -26,6 +27,7 @@ const terminalMocks = vi.hoisted(() => {
       type: "normal" as "normal" | "alternate",
       cursorX: 0,
       cursorY: 0,
+      getLine: vi.fn(),
     },
   };
   const bufferService = {
@@ -67,6 +69,7 @@ const terminalMocks = vi.hoisted(() => {
       resizeHandler = handler;
     }),
     attachCustomKeyEventHandler,
+    registerLinkProvider,
     hasSelection,
     getSelection,
     clearSelection,
@@ -74,6 +77,7 @@ const terminalMocks = vi.hoisted(() => {
 
   return {
     attachCustomKeyEventHandler,
+    registerLinkProvider,
     clearSelection,
     buffer,
     bufferService,
@@ -123,6 +127,12 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: terminalMocks.invoke,
 }));
 
+const openUrlMock = vi.fn();
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: (...args: unknown[]) => openUrlMock(...args),
+}));
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: vi.fn(() => terminalMocks.terminalInstance),
 }));
@@ -153,6 +163,7 @@ describe("FullscreenTerminal", () => {
     terminalMocks.fit.mockReset();
     terminalMocks.invoke.mockReset();
     terminalMocks.attachCustomKeyEventHandler.mockReset();
+    terminalMocks.registerLinkProvider.mockReset();
     terminalMocks.hasSelection.mockReset();
     terminalMocks.getSelection.mockReset();
     terminalMocks.clearSelection.mockReset();
@@ -164,6 +175,7 @@ describe("FullscreenTerminal", () => {
     terminalMocks.buffer.active.type = "normal";
     terminalMocks.buffer.active.cursorX = 0;
     terminalMocks.buffer.active.cursorY = 0;
+    terminalMocks.buffer.active.getLine.mockReset();
     terminalMocks.terminalInstance.cols = 80;
     terminalMocks.terminalInstance.rows = 24;
     terminalMocks.bufferService.cols = 80;
@@ -183,6 +195,161 @@ describe("FullscreenTerminal", () => {
     });
     clipboardWriteText.mockReset();
     clipboardWriteText.mockResolvedValue(undefined);
+    openUrlMock.mockReset();
+    openUrlMock.mockResolvedValue(undefined);
+  });
+
+  it("detects fullscreen http links on a single rendered line", () => {
+    expect(
+      getFullscreenUrlLinks("See https://github.com/crossoverJie/tome/pull/41 now", 7)
+    ).toEqual([
+      {
+        text: "https://github.com/crossoverJie/tome/pull/41",
+        range: {
+          start: { x: 5, y: 7 },
+          end: { x: 48, y: 7 },
+        },
+      },
+    ]);
+  });
+
+  it("registers a fullscreen link provider that opens urls on Cmd+Click", () => {
+    terminalMocks.terminalInstance.buffer.active.getLine = vi.fn(() => ({
+      translateToString: () => "https://github.com/crossoverJie/tome/pull/41",
+    }));
+
+    render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={vi.fn()}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"https://github.com/crossoverJie/tome/pull/41"}
+      />
+    );
+
+    const provider = terminalMocks.registerLinkProvider.mock.calls[0]?.[0];
+    expect(provider).toBeTruthy();
+
+    let links:
+      | Array<{
+          text: string;
+          activate: (event: MouseEvent, text: string) => void;
+        }>
+      | undefined;
+    provider.provideLinks(1, (nextLinks: typeof links) => {
+      links = nextLinks;
+    });
+
+    expect(links).toHaveLength(1);
+    links?.[0]?.activate(new MouseEvent("click", { metaKey: true }), links[0].text);
+    expect(openUrlMock).toHaveBeenCalledWith("https://github.com/crossoverJie/tome/pull/41");
+  });
+
+  it("opens a fullscreen url on the first Cmd+Click without waiting for xterm link activation", () => {
+    terminalMocks.buffer.active.cursorX = 0;
+    terminalMocks.buffer.active.cursorY = 0;
+    terminalMocks.terminalInstance.buffer.active.getLine = vi.fn(() => ({
+      translateToString: () => "https://github.com/crossoverJie/tome/pull/41",
+    }));
+
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={vi.fn()}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"https://github.com/crossoverJie/tome/pull/41"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
+      width: 800,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    act(() => {
+      terminalElement.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          metaKey: true,
+          clientX: 20,
+          clientY: 10,
+        })
+      );
+      terminalElement.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          metaKey: true,
+          clientX: 20,
+          clientY: 10,
+        })
+      );
+    });
+
+    expect(openUrlMock).toHaveBeenCalledWith("https://github.com/crossoverJie/tome/pull/41");
+  });
+
+  it("opens a fullscreen url on Cmd+mouseup even when no pointerDown was captured", () => {
+    terminalMocks.terminalInstance.buffer.active.getLine = vi.fn(() => ({
+      translateToString: () => "https://github.com/crossoverJie/tome/pull/41",
+    }));
+
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={vi.fn()}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"https://github.com/crossoverJie/tome/pull/41"}
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    vi.spyOn(terminalElement, "getBoundingClientRect").mockReturnValue({
+      width: 800,
+      height: 480,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 480,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    act(() => {
+      terminalElement.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          metaKey: true,
+          clientX: 20,
+          clientY: 10,
+        })
+      );
+    });
+
+    expect(openUrlMock).toHaveBeenCalledWith("https://github.com/crossoverJie/tome/pull/41");
   });
 
   it("starts writing from the provided offset when fullscreen activates", () => {

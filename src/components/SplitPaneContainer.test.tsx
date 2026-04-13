@@ -43,6 +43,7 @@ describe("SplitPaneContainer", () => {
         onFocusPane={() => {}}
         onUpdateSplitRatio={() => {}}
         onWorkingDirectoryChange={() => {}}
+        onOpenPathInNewTab={() => {}}
       />
     );
 
@@ -63,6 +64,7 @@ describe("SplitPaneContainer", () => {
         onFocusPane={() => {}}
         onUpdateSplitRatio={() => {}}
         onWorkingDirectoryChange={() => {}}
+        onOpenPathInNewTab={() => {}}
       />
     );
 
