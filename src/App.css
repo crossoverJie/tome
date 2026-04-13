@@ -173,6 +173,26 @@ body {
   margin: 0;
 }
 
+.output-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  color: #8ec5ff;
+}
+
+.output-link:hover {
+  color: #c5e1ff;
+}
+
+.output-link-path {
+  color: #9ed9b3;
+}
+
+.output-link-path:hover {
+  color: #c6efd2;
+}
+
 .block-output-collapsed {
   padding: 4px 12px 8px 36px;
   border-top: 1px solid var(--border-color);

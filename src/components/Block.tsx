@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, memo } from "react";
 import AnsiToHtml from "ansi-to-html";
 import { processTerminalOutput } from "../utils/terminalOutput";
+import { linkifyOutputElement, type OutputLinkKind } from "../utils/outputLinks";
 import type { RunningBlockStatus } from "../hooks/useTerminalSession";
 
 const ansiConverter = new AnsiToHtml({
@@ -46,6 +47,12 @@ interface BlockProps {
   runningStatus?: RunningBlockStatus;
   silenceMs?: number;
   hasInlineProgress?: boolean;
+  onOutputLinkActivate?: (link: {
+    kind: OutputLinkKind;
+    target: string;
+    text: string;
+    metaKey: boolean;
+  }) => void;
 }
 
 export function formatDuration(start: number, end: number | null): string {
@@ -219,8 +226,10 @@ export const Block = memo(function Block({
   runningStatus = "starting",
   silenceMs = 0,
   hasInlineProgress = false,
+  onOutputLinkActivate,
 }: BlockProps) {
   const outputRef = useRef<HTMLPreElement>(null);
+  const lastMouseDownActivationRef = useRef<string | null>(null);
   const runningDuration = useRunningDuration(startTime, isRunning);
 
   useEffect(() => {
@@ -240,8 +249,94 @@ export const Block = memo(function Block({
       } else {
         outputRef.current.innerHTML = ansiConverter.toHtml(processedOutput);
       }
+      linkifyOutputElement(outputRef.current);
     }
   }, [output, searchRanges, activeSearchRange]);
+
+  const handleOutputLinkEvent = (
+    target: EventTarget | null,
+    metaKey: boolean
+  ): {
+    kind: OutputLinkKind;
+    target: string;
+    text: string;
+    metaKey: boolean;
+  } | null => {
+    if (!(target instanceof HTMLElement)) {
+      return null;
+    }
+
+    const outputLink = target.closest<HTMLElement>("[data-output-link-kind]");
+    if (!outputLink) {
+      return null;
+    }
+
+    const kind = outputLink.dataset.outputLinkKind as OutputLinkKind | undefined;
+    const targetValue = outputLink.dataset.outputLinkTarget;
+    const text = outputLink.dataset.outputLinkText;
+    if (!kind || !targetValue || !text) {
+      return null;
+    }
+
+    return {
+      kind,
+      target: targetValue,
+      text,
+      metaKey,
+    };
+  };
+
+  useEffect(() => {
+    const outputElement = outputRef.current;
+    if (!outputElement) {
+      return;
+    }
+
+    const handleNativeMouseDown = (event: MouseEvent) => {
+      const link = handleOutputLinkEvent(event.target, event.metaKey);
+      if (!link) {
+        return;
+      }
+
+      if (link.kind === "url" && link.metaKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        lastMouseDownActivationRef.current = `${link.kind}:${link.target}`;
+        onOutputLinkActivate?.(link);
+      }
+    };
+
+    const handleNativeClick = (event: MouseEvent) => {
+      const link = handleOutputLinkEvent(event.target, event.metaKey);
+      if (!link) {
+        return;
+      }
+
+      const activationKey = `${link.kind}:${link.target}`;
+      if (lastMouseDownActivationRef.current === activationKey) {
+        lastMouseDownActivationRef.current = null;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      event.stopPropagation();
+      if (link.kind === "url" && !link.metaKey) {
+        return;
+      }
+
+      event.preventDefault();
+      onOutputLinkActivate?.(link);
+    };
+
+    outputElement.addEventListener("mousedown", handleNativeMouseDown, true);
+    outputElement.addEventListener("click", handleNativeClick, true);
+
+    return () => {
+      outputElement.removeEventListener("mousedown", handleNativeMouseDown, true);
+      outputElement.removeEventListener("click", handleNativeClick, true);
+    };
+  }, [onOutputLinkActivate]);
 
   const exitCodeClass = exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
   const runningClass = isRunning ? "block-running" : "";

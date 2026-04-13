@@ -11,6 +11,7 @@ interface SplitPaneContainerProps {
   onFocusPane: (paneId: string) => void;
   onUpdateSplitRatio: (paneId: string, ratio: number) => void;
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
+  onOpenPathInNewTab: (cwd: string) => void;
   style?: React.CSSProperties;
 }
 
@@ -21,6 +22,7 @@ export function SplitPaneContainer({
   onFocusPane,
   onUpdateSplitRatio,
   onWorkingDirectoryChange,
+  onOpenPathInNewTab,
   style,
 }: SplitPaneContainerProps) {
   const paneRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function SplitPaneContainer({
               isFocused={focusedPaneId === leaf.paneId}
               onFocus={() => onFocusPane(leaf.paneId)}
               onWorkingDirectoryChange={onWorkingDirectoryChange}
+              onOpenPathInNewTab={onOpenPathInNewTab}
             />
           </div>
         );

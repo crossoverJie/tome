@@ -88,6 +88,7 @@ describe("PaneView", () => {
         isFocused={true}
         onFocus={() => {}}
         onWorkingDirectoryChange={() => {}}
+        onOpenPathInNewTab={() => {}}
       />
     );
 
@@ -111,6 +112,7 @@ describe("PaneView", () => {
         isFocused={true}
         onFocus={() => {}}
         onWorkingDirectoryChange={() => {}}
+        onOpenPathInNewTab={() => {}}
       />
     );
 
@@ -139,6 +141,7 @@ describe("PaneView", () => {
         isFocused={false}
         onFocus={onFocus}
         onWorkingDirectoryChange={() => {}}
+        onOpenPathInNewTab={() => {}}
       />
     );
 
@@ -163,6 +166,7 @@ describe("PaneView", () => {
           isFocused={true}
           onFocus={() => {}}
           onWorkingDirectoryChange={() => {}}
+          onOpenPathInNewTab={() => {}}
         />
       );
 
@@ -184,6 +188,7 @@ describe("PaneView", () => {
           isFocused={true}
           onFocus={() => {}}
           onWorkingDirectoryChange={() => {}}
+          onOpenPathInNewTab={() => {}}
         />
       );
 
@@ -205,6 +210,7 @@ describe("PaneView", () => {
           isFocused={true}
           onFocus={() => {}}
           onWorkingDirectoryChange={() => {}}
+          onOpenPathInNewTab={() => {}}
         />
       );
 
@@ -230,6 +236,7 @@ describe("PaneView", () => {
           isFocused={false}
           onFocus={() => {}}
           onWorkingDirectoryChange={() => {}}
+          onOpenPathInNewTab={() => {}}
         />
       );
 

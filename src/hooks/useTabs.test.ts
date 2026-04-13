@@ -2,8 +2,25 @@ import { describe, it, expect } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useTabs } from "./useTabs";
 import { getLeafPaneIds } from "../types/pane";
+import { clearAllSessionState, consumePaneSessionInitOptions } from "./sessionState";
 
 describe("useTabs", () => {
+  it("creates a tab with an initial cwd when requested", () => {
+    clearAllSessionState();
+    const { result } = renderHook(() => useTabs());
+
+    act(() => {
+      result.current.createTabWithCwd("/tmp/project");
+    });
+
+    expect(result.current.tabs).toHaveLength(2);
+    const createdTab = result.current.activeTab;
+    expect(createdTab.focusedPaneId).not.toBeNull();
+    expect(consumePaneSessionInitOptions(createdTab.focusedPaneId!)).toEqual({
+      initialCwd: "/tmp/project",
+    });
+  });
+
   it("initializes with one tab and one focused pane", () => {
     const { result } = renderHook(() => useTabs());
     expect(result.current.tabs).toHaveLength(1);

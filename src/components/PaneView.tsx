@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { BlockList } from "./BlockList";
 import { InputEditor } from "./InputEditor";
 import { RunningCommandBar } from "./RunningCommandBar";
@@ -15,6 +16,13 @@ interface PaneViewProps {
   isFocused: boolean;
   onFocus: () => void;
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
+  onOpenPathInNewTab: (cwd: string) => void;
+}
+
+interface ResolvedPathTarget {
+  path: string;
+  isDirectory: boolean;
+  parentDirectory: string;
 }
 
 export function PaneView({
@@ -23,6 +31,7 @@ export function PaneView({
   isFocused,
   onFocus,
   onWorkingDirectoryChange,
+  onOpenPathInNewTab,
 }: PaneViewProps) {
   const {
     sessionId: activeSessionId,
@@ -251,6 +260,44 @@ export function PaneView({
     onFocus();
   }, [onFocus]);
 
+  const handleOutputLinkActivate = useCallback(
+    async (link: { kind: "url" | "path"; target: string; metaKey: boolean }) => {
+      try {
+        if (link.kind === "url") {
+          if (!link.metaKey) {
+            return;
+          }
+          await openUrl(link.target);
+          return;
+        }
+
+        const resolved = await invoke<ResolvedPathTarget>("resolve_path_target", {
+          path: link.target,
+          cwd: currentDirectory ?? "/",
+        });
+
+        if (link.metaKey) {
+          if (resolved.isDirectory) {
+            await openPath(resolved.path);
+          } else {
+            await revealItemInDir(resolved.path);
+          }
+          return;
+        }
+
+        onOpenPathInNewTab(resolved.isDirectory ? resolved.path : resolved.parentDirectory);
+      } catch (error) {
+        console.error("[tome][output-link] failure", {
+          paneId,
+          currentDirectory,
+          link,
+          error,
+        });
+      }
+    },
+    [currentDirectory, onOpenPathInNewTab, paneId]
+  );
+
   return (
     <div
       className={`pane-view ${isFocused ? "focused" : ""}`}
@@ -278,6 +325,7 @@ export function PaneView({
             searchResults={searchResults}
             currentSearchIndex={currentSearchIndex}
             runningBlock={runningBlock}
+            onOutputLinkActivate={handleOutputLinkActivate}
           />
           {paneInputMode === "editor" && (
             <InputEditor
