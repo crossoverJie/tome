@@ -498,18 +498,7 @@ export function InputEditor({
         return true;
       }
 
-      if (historyIndexRef.current === -1) return false;
-      historyIndexRef.current++;
-      let text: string;
-      if (historyIndexRef.current >= historyRef.current.length) {
-        historyIndexRef.current = -1;
-        text = savedInputRef.current;
-      } else {
-        text = historyRef.current[historyIndexRef.current];
-      }
-      replaceEditorText(view, text);
-      closeCompletion();
-      return true;
+      return false;
     },
     [closeCompletion, moveCompletionSelection, replaceEditorText]
   );
