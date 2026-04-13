@@ -45,29 +45,11 @@ static COMMAND_SET: OnceLock<HashSet<String>> = OnceLock::new();
 fn get_command_set() -> &'static HashSet<String> {
     COMMAND_SET.get_or_init(|| {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut set = HashSet::new();
-
-        for word in zsh_words(&shell) {
-            set.insert(word.clone());
-        }
-
-        if let Some(path_var) = env::var_os("PATH") {
-            for dir in env::split_paths(&path_var) {
-                let entries = match fs::read_dir(&dir) {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
-                for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_file() && is_executable(&metadata) {
-                            set.insert(entry.file_name().to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        set
+        // Use zsh to get all available commands, including builtins, functions,
+        // aliases, and PATH executables as configured in the user's shell.
+        // This ensures commands from ~/.zshrc PATH modifications (e.g., homebrew)
+        // are correctly recognized.
+        load_zsh_words(&shell).into_iter().collect()
     })
 }
 
@@ -297,11 +279,15 @@ fn load_zsh_words(shell: &str) -> Vec<String> {
         "umask", "unalias", "unset", "until", "wait", "while",
     ];
 
+    // Use ${(ok)commands} to get all commands known to zsh, including:
+    // - Shell builtins (cd, echo, etc.)
+    // - User-defined functions
+    // - User-defined aliases
+    // - All executables in PATH (as configured in ~/.zshrc)
+    // This ensures commands from homebrew (/opt/homebrew/bin) and other
+    // custom PATH entries are correctly recognized.
     let output = Command::new(shell)
-        .args([
-            "-lc",
-            "emulate -L zsh; print -rl -- ${(ok)builtins} ${(ok)reswords}",
-        ])
+        .args(["-lc", "emulate -L zsh; print -rl -- ${(ok)commands}"])
         .output();
 
     let Ok(output) = output else {
