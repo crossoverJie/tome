@@ -37,6 +37,8 @@ interface CompletionState {
   replaceTo: number;
 }
 
+type HistoryNavigationMode = "idle" | "browse" | "search";
+
 interface HistorySearchState {
   active: boolean;
   prefix: string;
@@ -137,6 +139,7 @@ export function InputEditor({
   const applyingHistoryNavigationRef = useRef(false);
   const disabledRef = useRef(Boolean(disabled));
   const historyRef = useRef(history);
+  const historyModeRef = useRef<HistoryNavigationMode>("idle");
   const historySearchRef = useRef<HistorySearchState>(EMPTY_HISTORY_SEARCH_STATE);
   const inlineSuggestionRef = useRef<{
     position: number;
@@ -203,6 +206,7 @@ export function InputEditor({
   }, []);
 
   const resetHistoryNavigation = useCallback(() => {
+    historyModeRef.current = "idle";
     historyIndexRef.current = -1;
     savedInputRef.current = "";
     historySearchRef.current = EMPTY_HISTORY_SEARCH_STATE;
@@ -372,6 +376,40 @@ export function InputEditor({
       }
 
       const text = view.state.doc.toString();
+      if (historyModeRef.current === "search") {
+        const result = navigateHistoryMatches(
+          historySearchRef.current.matches,
+          historySearchRef.current.index,
+          -1
+        );
+        if (!result.value) {
+          historyModeRef.current = "idle";
+          historySearchRef.current = EMPTY_HISTORY_SEARCH_STATE;
+          return false;
+        }
+
+        historySearchRef.current = {
+          ...historySearchRef.current,
+          index: result.index,
+        };
+        replaceEditorText(view, result.value);
+        return true;
+      }
+
+      if (historyModeRef.current === "browse") {
+        if (historyRef.current.length === 0) return false;
+        if (historyIndexRef.current > 0) {
+          historyIndexRef.current--;
+        } else {
+          return true;
+        }
+
+        const cmd = historyRef.current[historyIndexRef.current];
+        replaceEditorText(view, cmd);
+        closeCompletion();
+        return true;
+      }
+
       if (text.trim()) {
         if (!historySearchRef.current.active) {
           historySearchRef.current = {
@@ -381,6 +419,7 @@ export function InputEditor({
             index: -1,
             savedInput: text,
           };
+          historyModeRef.current = "search";
         }
 
         const result = navigateHistoryMatches(
@@ -404,6 +443,7 @@ export function InputEditor({
       if (historyIndexRef.current === -1) {
         savedInputRef.current = text;
         historyIndexRef.current = historyRef.current.length - 1;
+        historyModeRef.current = "browse";
       } else if (historyIndexRef.current > 0) {
         historyIndexRef.current--;
       } else {
@@ -424,7 +464,7 @@ export function InputEditor({
         return true;
       }
 
-      if (historySearchRef.current.active) {
+      if (historyModeRef.current === "search") {
         const result = navigateHistoryMatches(
           historySearchRef.current.matches,
           historySearchRef.current.index,
@@ -436,8 +476,25 @@ export function InputEditor({
           active: result.index !== -1,
           index: result.index,
         };
+        historyModeRef.current = result.index === -1 ? "idle" : "search";
 
         replaceEditorText(view, result.value ?? historySearchRef.current.savedInput);
+        return true;
+      }
+
+      if (historyModeRef.current === "browse") {
+        if (historyIndexRef.current === -1) return false;
+        historyIndexRef.current++;
+        let text: string;
+        if (historyIndexRef.current >= historyRef.current.length) {
+          historyIndexRef.current = -1;
+          historyModeRef.current = "idle";
+          text = savedInputRef.current;
+        } else {
+          text = historyRef.current[historyIndexRef.current];
+        }
+        replaceEditorText(view, text);
+        closeCompletion();
         return true;
       }
 
