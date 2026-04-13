@@ -45,35 +45,42 @@ static COMMAND_SET: OnceLock<HashSet<String>> = OnceLock::new();
 fn get_command_set() -> &'static HashSet<String> {
     COMMAND_SET.get_or_init(|| {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let mut set = HashSet::new();
-
-        for word in zsh_words(&shell) {
-            set.insert(word.clone());
-        }
-
-        if let Some(path_var) = env::var_os("PATH") {
-            for dir in env::split_paths(&path_var) {
-                let entries = match fs::read_dir(&dir) {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
-                for entry in entries.flatten() {
-                    if let Ok(metadata) = entry.metadata() {
-                        if metadata.is_file() && is_executable(&metadata) {
-                            set.insert(entry.file_name().to_string_lossy().to_string());
-                        }
-                    }
-                }
-            }
-        }
-
-        set
+        build_command_set(
+            load_zsh_words(&shell),
+            path_commands("").unwrap_or_default(),
+        )
     })
+}
+
+fn build_command_set(zsh_words: Vec<String>, path_commands: BTreeSet<String>) -> HashSet<String> {
+    zsh_words.into_iter().chain(path_commands).collect()
 }
 
 /// Returns true if the given command name exists as a PATH executable or shell builtin.
 pub fn check_command_exists(command: &str) -> bool {
-    get_command_set().contains(command)
+    check_command_exists_with(command, get_command_set(), &shell_command_exists)
+}
+
+fn check_command_exists_with(
+    command: &str,
+    command_set: &HashSet<String>,
+    shell_lookup: &dyn Fn(&str) -> bool,
+) -> bool {
+    command_set.contains(command) || shell_lookup(command)
+}
+
+fn shell_command_exists(command: &str) -> bool {
+    let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+
+    Command::new(shell)
+        .env("TOME_LOOKUP_COMMAND", command)
+        .args([
+            "-lc",
+            "emulate -L zsh; command -v -- \"$TOME_LOOKUP_COMMAND\" >/dev/null 2>&1",
+        ])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn expand_tilde(path: &str) -> String {
@@ -609,5 +616,36 @@ mod tests {
     fn check_command_exists_builtin_pwd() {
         // "pwd" is a zsh builtin and is also in PATH as /bin/pwd
         assert!(check_command_exists("pwd"));
+    }
+
+    #[test]
+    fn build_command_set_merges_path_commands_with_shell_words() {
+        let command_set = build_command_set(
+            vec!["pwd".to_string()],
+            BTreeSet::from(["claude".to_string(), "codex".to_string()]),
+        );
+
+        assert!(command_set.contains("pwd"));
+        assert!(command_set.contains("claude"));
+        assert!(command_set.contains("codex"));
+    }
+
+    #[test]
+    fn check_command_exists_with_falls_back_to_shell_lookup() {
+        let command_set = HashSet::new();
+
+        let exists =
+            check_command_exists_with("claude", &command_set, &|command| command == "claude");
+
+        assert!(exists);
+    }
+
+    #[test]
+    fn check_command_exists_with_prefers_cached_command_set() {
+        let command_set = HashSet::from(["claude".to_string()]);
+
+        let exists = check_command_exists_with("claude", &command_set, &|_| false);
+
+        assert!(exists);
     }
 }

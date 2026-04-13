@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, type MouseEvent } from "react";
-import { EditorView, keymap, placeholder } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
+import { Decoration, EditorView, WidgetType, keymap, placeholder } from "@codemirror/view";
+import { EditorState, RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import { shellLanguage } from "./shellLanguage";
 import { shellSyntaxHighlighting } from "./shellHighlight";
 import { shellValidation, type CheckCommandExists, type CheckPathExists } from "./shellValidation";
@@ -11,6 +11,12 @@ import {
   cycleCompletionIndex,
   decideCompletionAction,
 } from "./inputCompletion";
+import {
+  getHistoryMatches,
+  getInlineHistorySuggestion,
+  type InlineHistorySuggestion,
+  navigateHistoryMatches,
+} from "./inputHistory";
 
 interface InputEditorProps {
   onSubmit: (command: string) => void;
@@ -31,6 +37,14 @@ interface CompletionState {
   replaceTo: number;
 }
 
+interface HistorySearchState {
+  active: boolean;
+  prefix: string;
+  matches: string[];
+  index: number;
+  savedInput: string;
+}
+
 const EMPTY_COMPLETION_STATE: CompletionState = {
   open: false,
   items: [],
@@ -38,6 +52,70 @@ const EMPTY_COMPLETION_STATE: CompletionState = {
   replaceFrom: 0,
   replaceTo: 0,
 };
+
+const EMPTY_HISTORY_SEARCH_STATE: HistorySearchState = {
+  active: false,
+  prefix: "",
+  matches: [],
+  index: -1,
+  savedInput: "",
+};
+
+class InlineSuggestionWidget extends WidgetType {
+  constructor(private readonly suffix: string) {
+    super();
+  }
+
+  eq(other: InlineSuggestionWidget) {
+    return other.suffix === this.suffix;
+  }
+
+  toDOM() {
+    const element = document.createElement("span");
+    element.className = "input-inline-suggestion";
+    element.textContent = this.suffix;
+    return element;
+  }
+}
+
+const setInlineSuggestionDecorations = StateEffect.define<{
+  position: number;
+  suffix: string;
+} | null>();
+
+const inlineSuggestionField = StateField.define({
+  create() {
+    return Decoration.none;
+  },
+  update(decorations, transaction) {
+    decorations = decorations.map(transaction.changes);
+
+    for (const effect of transaction.effects) {
+      if (!effect.is(setInlineSuggestionDecorations)) {
+        continue;
+      }
+
+      if (!effect.value) {
+        decorations = Decoration.none;
+        continue;
+      }
+
+      const builder = new RangeSetBuilder<Decoration>();
+      builder.add(
+        effect.value.position,
+        effect.value.position,
+        Decoration.widget({
+          side: 1,
+          widget: new InlineSuggestionWidget(effect.value.suffix),
+        })
+      );
+      decorations = builder.finish();
+    }
+
+    return decorations;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
 
 export function InputEditor({
   onSubmit,
@@ -56,8 +134,14 @@ export function InputEditor({
   const savedInputRef = useRef("");
   const requestSequenceRef = useRef(0);
   const applyingCompletionRef = useRef(false);
+  const applyingHistoryNavigationRef = useRef(false);
   const disabledRef = useRef(Boolean(disabled));
   const historyRef = useRef(history);
+  const historySearchRef = useRef<HistorySearchState>(EMPTY_HISTORY_SEARCH_STATE);
+  const inlineSuggestionRef = useRef<{
+    position: number;
+    suggestion: InlineHistorySuggestion;
+  } | null>(null);
   const addCommandRef = useRef(addCommand);
   const onSubmitRef = useRef(onSubmit);
   const onRequestCompletionRef = useRef(onRequestCompletion);
@@ -77,6 +161,10 @@ export function InputEditor({
 
   useEffect(() => {
     historyRef.current = history;
+    const view = viewRef.current;
+    if (view) {
+      refreshInlineSuggestion(view);
+    }
   }, [history]);
 
   useEffect(() => {
@@ -103,7 +191,6 @@ export function InputEditor({
     onCheckPathExistsRef.current = onCheckPathExists;
   }, [onCheckPathExists]);
 
-  // Focus editor when enabled (pane becomes focused)
   useEffect(() => {
     if (!disabled && viewRef.current) {
       viewRef.current.focus();
@@ -115,11 +202,87 @@ export function InputEditor({
     setCompletionState(EMPTY_COMPLETION_STATE);
   }, []);
 
+  const resetHistoryNavigation = useCallback(() => {
+    historyIndexRef.current = -1;
+    savedInputRef.current = "";
+    historySearchRef.current = EMPTY_HISTORY_SEARCH_STATE;
+  }, []);
+
+  const setInlineSuggestion = useCallback(
+    (
+      view: EditorView,
+      suggestion: { position: number; suggestion: InlineHistorySuggestion } | null
+    ) => {
+      const current = inlineSuggestionRef.current;
+      const isSame =
+        current?.position === suggestion?.position &&
+        current?.suggestion.fullCommand === suggestion?.suggestion.fullCommand &&
+        current?.suggestion.suffix === suggestion?.suggestion.suffix;
+
+      if (isSame) {
+        return;
+      }
+
+      inlineSuggestionRef.current = suggestion;
+      view.dispatch({
+        effects: setInlineSuggestionDecorations.of(
+          suggestion
+            ? {
+                position: suggestion.position,
+                suffix: suggestion.suggestion.suffix,
+              }
+            : null
+        ),
+      });
+    },
+    []
+  );
+
+  const refreshInlineSuggestion = useCallback(
+    (view: EditorView) => {
+      if (completionStateRef.current.open) {
+        setInlineSuggestion(view, null);
+        return;
+      }
+
+      const text = view.state.doc.toString();
+      const cursor = view.state.selection.main.head;
+      const suggestion = getInlineHistorySuggestion(historyRef.current, text, cursor);
+
+      if (!suggestion) {
+        setInlineSuggestion(view, null);
+        return;
+      }
+
+      setInlineSuggestion(view, {
+        position: cursor,
+        suggestion,
+      });
+    },
+    [setInlineSuggestion]
+  );
+
+  const replaceEditorText = useCallback(
+    (view: EditorView, text: string) => {
+      applyingHistoryNavigationRef.current = true;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: text },
+        selection: { anchor: text.length },
+      });
+      queueMicrotask(() => {
+        applyingHistoryNavigationRef.current = false;
+        refreshInlineSuggestion(view);
+      });
+    },
+    [refreshInlineSuggestion]
+  );
+
   useEffect(() => {
     if (disabled) {
       closeCompletion();
+      resetHistoryNavigation();
     }
-  }, [disabled, closeCompletion]);
+  }, [disabled, closeCompletion, resetHistoryNavigation]);
 
   const applyCompletion = useCallback(
     (view: EditorView, value: string, replaceFrom: number, replaceTo: number) => {
@@ -181,16 +344,13 @@ export function InputEditor({
         if (handled) {
           return true;
         }
-        // If completion menu was already closed (race condition),
-        // continue with normal submit instead of returning false
       }
 
       const value = view.state.doc.toString();
       if (value.trim()) {
         onSubmitRef.current(value + "\n");
         void addCommandRef.current(value);
-        historyIndexRef.current = -1;
-        savedInputRef.current = "";
+        resetHistoryNavigation();
       } else {
         onSubmitRef.current("\n");
       }
@@ -198,9 +358,10 @@ export function InputEditor({
         changes: { from: 0, to: view.state.doc.length, insert: "" },
       });
       closeCompletion();
+      setInlineSuggestion(view, null);
       return true;
     },
-    [applySelectedCompletion, closeCompletion]
+    [applySelectedCompletion, closeCompletion, resetHistoryNavigation, setInlineSuggestion]
   );
 
   const handleHistoryUp = useCallback(
@@ -210,9 +371,38 @@ export function InputEditor({
         return true;
       }
 
+      const text = view.state.doc.toString();
+      if (text.trim()) {
+        if (!historySearchRef.current.active) {
+          historySearchRef.current = {
+            active: true,
+            prefix: text,
+            matches: getHistoryMatches(historyRef.current, text),
+            index: -1,
+            savedInput: text,
+          };
+        }
+
+        const result = navigateHistoryMatches(
+          historySearchRef.current.matches,
+          historySearchRef.current.index,
+          -1
+        );
+        if (!result.value) {
+          return false;
+        }
+
+        historySearchRef.current = {
+          ...historySearchRef.current,
+          index: result.index,
+        };
+        replaceEditorText(view, result.value);
+        return true;
+      }
+
       if (historyRef.current.length === 0) return false;
       if (historyIndexRef.current === -1) {
-        savedInputRef.current = view.state.doc.toString();
+        savedInputRef.current = text;
         historyIndexRef.current = historyRef.current.length - 1;
       } else if (historyIndexRef.current > 0) {
         historyIndexRef.current--;
@@ -220,20 +410,34 @@ export function InputEditor({
         return true;
       }
       const cmd = historyRef.current[historyIndexRef.current];
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: cmd },
-        selection: { anchor: cmd.length },
-      });
+      replaceEditorText(view, cmd);
       closeCompletion();
       return true;
     },
-    [closeCompletion, moveCompletionSelection]
+    [closeCompletion, moveCompletionSelection, replaceEditorText]
   );
 
   const handleHistoryDown = useCallback(
     (view: EditorView) => {
       if (completionStateRef.current.open) {
         moveCompletionSelection(1);
+        return true;
+      }
+
+      if (historySearchRef.current.active) {
+        const result = navigateHistoryMatches(
+          historySearchRef.current.matches,
+          historySearchRef.current.index,
+          1
+        );
+
+        historySearchRef.current = {
+          ...historySearchRef.current,
+          active: result.index !== -1,
+          index: result.index,
+        };
+
+        replaceEditorText(view, result.value ?? historySearchRef.current.savedInput);
         return true;
       }
 
@@ -246,14 +450,11 @@ export function InputEditor({
       } else {
         text = historyRef.current[historyIndexRef.current];
       }
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        selection: { anchor: text.length },
-      });
+      replaceEditorText(view, text);
       closeCompletion();
       return true;
     },
-    [closeCompletion, moveCompletionSelection]
+    [closeCompletion, moveCompletionSelection, replaceEditorText]
   );
 
   const requestEditorCompletion = useCallback(
@@ -346,6 +547,25 @@ export function InputEditor({
     return true;
   }, [closeCompletion]);
 
+  const handleArrowRight = useCallback(
+    (view: EditorView) => {
+      const current = inlineSuggestionRef.current;
+      if (!current) {
+        return false;
+      }
+
+      const cursor = view.state.selection.main.head;
+      if (cursor !== view.state.doc.length) {
+        return false;
+      }
+
+      resetHistoryNavigation();
+      replaceEditorText(view, current.suggestion.fullCommand);
+      return true;
+    },
+    [replaceEditorText, resetHistoryNavigation]
+  );
+
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -359,7 +579,7 @@ export function InputEditor({
           },
           {
             key: "Shift-Enter",
-            run: () => false, // Let default newline behavior happen
+            run: () => false,
           },
           {
             key: "ArrowUp",
@@ -368,6 +588,10 @@ export function InputEditor({
           {
             key: "ArrowDown",
             run: (view) => handleHistoryDown(view),
+          },
+          {
+            key: "ArrowRight",
+            run: (view) => handleArrowRight(view),
           },
           {
             key: "Tab",
@@ -385,18 +609,23 @@ export function InputEditor({
         placeholder("Type a command..."),
         shellLanguage,
         shellSyntaxHighlighting,
+        inlineSuggestionField,
         ...shellValidation(
           (cmd) => onCheckCommandExistsRef.current?.(cmd) ?? Promise.resolve(true),
           (path, cwd) => onCheckPathExistsRef.current?.(path, cwd) ?? Promise.resolve(true),
           () => currentDirectoryRef.current
         ),
         EditorView.updateListener.of((update) => {
-          if (!completionStateRef.current.open || applyingCompletionRef.current) {
-            return;
-          }
-
           if (update.docChanged || update.selectionSet) {
-            closeCompletion();
+            if (completionStateRef.current.open && !applyingCompletionRef.current) {
+              closeCompletion();
+            }
+
+            if (!applyingHistoryNavigationRef.current && !applyingCompletionRef.current) {
+              resetHistoryNavigation();
+            }
+
+            refreshInlineSuggestion(update.view);
           }
         }),
         EditorView.theme({
@@ -414,6 +643,11 @@ export function InputEditor({
           },
           ".cm-placeholder": {
             color: "#666",
+          },
+          ".input-inline-suggestion": {
+            color: "var(--text-muted)",
+            opacity: "0.7",
+            pointerEvents: "none",
           },
           "&.cm-focused": {
             outline: "none",
@@ -435,11 +669,22 @@ export function InputEditor({
 
     viewRef.current = view;
     view.focus();
+    refreshInlineSuggestion(view);
 
     return () => {
       view.destroy();
     };
-  }, [handleEscape, handleHistoryDown, handleHistoryUp, handleShiftTab, handleSubmit, handleTab]);
+  }, [
+    handleArrowRight,
+    handleEscape,
+    handleHistoryDown,
+    handleHistoryUp,
+    handleShiftTab,
+    handleSubmit,
+    handleTab,
+    refreshInlineSuggestion,
+    resetHistoryNavigation,
+  ]);
 
   const handleMenuItemMouseDown = useCallback(
     (index: number) => (event: MouseEvent<HTMLButtonElement>) => {
