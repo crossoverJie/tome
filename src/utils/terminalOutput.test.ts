@@ -114,8 +114,6 @@ describe("appendTerminalOutputChunk", () => {
     output = appendTerminalOutputChunk(output, "Downloading 100%\n");
     output = appendTerminalOutputChunk(output, "==> Installing package\n");
 
-    expect(output).toBe(
-      "==> Downloading package\nDownloading 100%\n==> Installing package\n"
-    );
+    expect(output).toBe("==> Downloading package\nDownloading 100%\n==> Installing package\n");
   });
 });

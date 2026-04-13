@@ -304,11 +304,15 @@ fn load_zsh_words(shell: &str) -> Vec<String> {
         "umask", "unalias", "unset", "until", "wait", "while",
     ];
 
+    // Use ${(ok)commands} to get all commands known to zsh, including:
+    // - Shell builtins (cd, echo, etc.)
+    // - User-defined functions
+    // - User-defined aliases
+    // - All executables in PATH (as configured in ~/.zshrc)
+    // This ensures commands from homebrew (/opt/homebrew/bin) and other
+    // custom PATH entries are correctly recognized.
     let output = Command::new(shell)
-        .args([
-            "-lc",
-            "emulate -L zsh; print -rl -- ${(ok)builtins} ${(ok)reswords}",
-        ])
+        .args(["-lc", "emulate -L zsh; print -rl -- ${(ok)commands}"])
         .output();
 
     let Ok(output) = output else {
