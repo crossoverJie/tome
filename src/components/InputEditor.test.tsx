@@ -195,6 +195,52 @@ describe("InputEditor", () => {
         expect(getEditorView(container).state.doc.toString()).toBe("another");
       });
     });
+
+    it("browses full history continuously when ArrowUp starts from empty input", async () => {
+      const { container } = await renderEditor();
+
+      keyDown(container, "ArrowUp");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("pwd");
+      });
+
+      keyDown(container, "ArrowUp");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("another-command");
+      });
+
+      keyDown(container, "ArrowUp");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("previous-command");
+      });
+    });
+
+    it("returns to the original empty input when browsing history back down", async () => {
+      const { container } = await renderEditor();
+
+      keyDown(container, "ArrowUp");
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("pwd");
+      });
+
+      keyDown(container, "ArrowUp");
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("another-command");
+      });
+
+      keyDown(container, "ArrowDown");
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("pwd");
+      });
+
+      keyDown(container, "ArrowDown");
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("");
+      });
+    });
   });
 
   describe("inline history suggestion", () => {
