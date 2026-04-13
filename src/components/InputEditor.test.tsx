@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
+import { EditorView } from "@codemirror/view";
 import { InputEditor } from "./InputEditor";
 
-// Mock useCommandHistory to provide predictable history
+let mockHistory = ["previous-command", "another-command", "pwd"];
+
 vi.mock("../hooks/useCommandHistory", () => ({
   useCommandHistory: () => ({
-    history: ["previous-command", "another-command"],
+    history: mockHistory,
     addCommand: vi.fn(),
   }),
 }));
@@ -16,6 +18,7 @@ describe("InputEditor", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHistory = ["previous-command", "another-command", "pwd"];
     requestCompletionMock.mockResolvedValue({
       replaceFrom: 0,
       replaceTo: 0,
@@ -33,11 +36,39 @@ describe("InputEditor", () => {
         {...props}
       />
     );
-    // Wait for CodeMirror to initialize
     await waitFor(() => {
       expect(result.container.querySelector(".cm-editor")).toBeTruthy();
     });
     return result;
+  }
+
+  function getEditorView(container: HTMLElement) {
+    const editorElement = container.querySelector(".cm-editor");
+    expect(editorElement).toBeTruthy();
+    const view = EditorView.findFromDOM(editorElement as HTMLElement);
+    expect(view).toBeTruthy();
+    return view as EditorView;
+  }
+
+  function setEditorText(container: HTMLElement, text: string, cursor = text.length) {
+    const view = getEditorView(container);
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: text },
+      selection: { anchor: cursor },
+    });
+  }
+
+  function keyDown(container: HTMLElement, key: string) {
+    const cmContent = container.querySelector(".cm-content") as HTMLElement;
+    cmContent.focus();
+    cmContent.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        code: key,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
   }
 
   describe("basic rendering", () => {
@@ -66,6 +97,34 @@ describe("InputEditor", () => {
     });
   });
 
+  describe("command validation styling", () => {
+    it("does not mark known commands as cm-error-token", async () => {
+      const { container } = await renderEditor({
+        onCheckCommandExists: vi.fn().mockResolvedValue(true),
+        onCheckPathExists: vi.fn().mockResolvedValue(true),
+      });
+
+      setEditorText(container, "claude");
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      expect(container.querySelector(".cm-error-token")).toBeFalsy();
+    });
+
+    it("marks unknown commands as cm-error-token", async () => {
+      const { container } = await renderEditor({
+        onCheckCommandExists: vi.fn().mockResolvedValue(false),
+        onCheckPathExists: vi.fn().mockResolvedValue(true),
+      });
+
+      setEditorText(container, "lsx");
+
+      await waitFor(() => {
+        expect(container.querySelector(".cm-error-token")).toBeTruthy();
+      });
+    });
+  });
+
   describe("completion UI", () => {
     it("shows completion menu when items are returned", async () => {
       requestCompletionMock.mockResolvedValue({
@@ -79,25 +138,21 @@ describe("InputEditor", () => {
       });
 
       const { container } = await renderEditor();
-
-      // Focus the editor and trigger completion via Tab key
       const cmContent = container.querySelector(".cm-content") as HTMLElement;
       cmContent.focus();
-
-      // Simulate Tab key press
-      const tabEvent = new KeyboardEvent("keydown", {
-        key: "Tab",
-        code: "Tab",
-        bubbles: true,
-        cancelable: true,
-      });
-      cmContent.dispatchEvent(tabEvent);
+      cmContent.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
 
       await waitFor(() => {
         expect(requestCompletionMock).toHaveBeenCalled();
       });
 
-      // Wait for completion menu to appear
       await waitFor(() => {
         expect(container.querySelector(".completion-menu")).toBeTruthy();
       });
@@ -105,10 +160,6 @@ describe("InputEditor", () => {
       const items = container.querySelectorAll(".completion-menu-item");
       expect(items.length).toBe(2);
     });
-
-    // Note: Testing completion menu open/close is complex due to CodeMirror's
-    // async event handling. The core behavior is verified by manual testing
-    // and the code structure ensures Escape closes the menu via handleEscape.
   });
 
   describe("request completion", () => {
@@ -117,7 +168,6 @@ describe("InputEditor", () => {
       const cmContent = container.querySelector(".cm-content") as HTMLElement;
       cmContent.focus();
 
-      // Simulate Tab
       cmContent.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })
       );
@@ -128,25 +178,83 @@ describe("InputEditor", () => {
     });
   });
 
+  describe("history behavior", () => {
+    it("filters history by prefix on ArrowUp and ArrowDown", async () => {
+      const { container } = await renderEditor();
+
+      setEditorText(container, "another");
+      keyDown(container, "ArrowUp");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("another-command");
+      });
+
+      keyDown(container, "ArrowDown");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("another");
+      });
+    });
+  });
+
+  describe("inline history suggestion", () => {
+    it("accepts the inline history suggestion with ArrowRight at the line end", async () => {
+      const { container } = await renderEditor();
+
+      setEditorText(container, "another");
+
+      await waitFor(() => {
+        expect(container.querySelector(".input-inline-suggestion")).toBeTruthy();
+      });
+
+      keyDown(container, "ArrowRight");
+
+      await waitFor(() => {
+        expect(getEditorView(container).state.doc.toString()).toBe("another-command");
+      });
+    });
+
+    it("refreshes the inline suggestion when history updates without editing the input", async () => {
+      mockHistory = ["pwd"];
+      const result = await renderEditor();
+
+      setEditorText(result.container, "ls");
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(result.container.querySelector(".input-inline-suggestion")).toBeFalsy();
+
+      mockHistory = ["pwd", "ls -lrth"];
+      result.rerender(
+        <InputEditor
+          onSubmit={onSubmitMock}
+          onRequestCompletion={requestCompletionMock}
+          disabled={false}
+        />
+      );
+
+      await waitFor(() => {
+        expect(result.container.querySelector(".input-inline-suggestion")).toBeTruthy();
+      });
+    });
+  });
+
   describe("submit behavior", () => {
     it("calls onSubmit when Enter is pressed", async () => {
       const { container } = await renderEditor();
       const cmContent = container.querySelector(".cm-content") as HTMLElement;
       cmContent.focus();
 
-      // Simulate Enter - this should trigger submit via CodeMirror's keymap
-      const enterEvent = new KeyboardEvent("keydown", {
-        key: "Enter",
-        code: "Enter",
-        bubbles: true,
-        cancelable: true,
-      });
-      cmContent.dispatchEvent(enterEvent);
+      cmContent.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          code: "Enter",
+          bubbles: true,
+          cancelable: true,
+        })
+      );
 
-      // Wait a bit for CodeMirror's keymap to process
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      // Should have attempted to submit (even if empty)
       expect(onSubmitMock).toHaveBeenCalled();
     });
 
@@ -222,16 +330,6 @@ describe("InputEditor", () => {
       expect(onSubmitMock).not.toHaveBeenCalled();
     });
   });
-
-  // Note: Testing CodeMirror's internal key handling is complex due to its
-  // sophisticated event system. The key behaviors are covered by:
-  // 1. Manual testing in the actual application
-  // 2. Integration tests with the full terminal session
-  // 3. The specific race condition fix is verified by code review
-  //
-  // The fix in handleSubmit ensures that when completionStateRef.current.open is true
-  // but applySelectedCompletion returns false (due to race condition), Enter still
-  // submits the command instead of returning false to CodeMirror.
 
   describe("busy state", () => {
     it("renders busy indicator when busy prop is true", async () => {

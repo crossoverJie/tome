@@ -4,6 +4,11 @@ import {
   cycleCompletionIndex,
   decideCompletionAction,
 } from "./inputCompletion";
+import {
+  getHistoryMatches,
+  getInlineHistorySuggestion,
+  navigateHistoryMatches,
+} from "./inputHistory";
 
 describe("applyCompletionValue", () => {
   it("replaces the target range and updates the cursor", () => {
@@ -104,5 +109,65 @@ describe("cycleCompletionIndex", () => {
   it("wraps selection in both directions", () => {
     expect(cycleCompletionIndex(0, -1, 3)).toBe(2);
     expect(cycleCompletionIndex(2, 1, 3)).toBe(0);
+  });
+});
+
+describe("getHistoryMatches", () => {
+  const history = ["git status --short", "ls -la", "git stash", "git status", "pwd", "git status"];
+
+  it("returns recent prefix matches without duplicates", () => {
+    expect(getHistoryMatches(history, "git st")).toEqual([
+      "git status",
+      "git stash",
+      "git status --short",
+    ]);
+  });
+
+  it("returns an empty list for empty prefixes", () => {
+    expect(getHistoryMatches(history, "")).toEqual([]);
+  });
+});
+
+describe("getInlineHistorySuggestion", () => {
+  const history = ["claude", "claude --resume", "claude --version"];
+
+  it("returns the most recent strict-prefix match", () => {
+    expect(getInlineHistorySuggestion(history, "claude --r", 10)).toEqual({
+      fullCommand: "claude --resume",
+      suffix: "esume",
+    });
+  });
+
+  it("does not suggest when the cursor is not at the end", () => {
+    expect(getInlineHistorySuggestion(history, "claude --r", 5)).toBeNull();
+  });
+
+  it("does not suggest when the input already equals a history item", () => {
+    expect(getInlineHistorySuggestion(history, "claude --resume", 16)).toBeNull();
+  });
+});
+
+describe("navigateHistoryMatches", () => {
+  const matches = ["ls -lah", "ls -la", "ls"];
+
+  it("starts from the most recent match on ArrowUp", () => {
+    expect(navigateHistoryMatches(matches, -1, -1)).toEqual({
+      index: 0,
+      value: "ls -lah",
+    });
+  });
+
+  it("moves forward through older matches on ArrowUp", () => {
+    expect(navigateHistoryMatches(matches, 0, -1)).toEqual({
+      index: 1,
+      value: "ls -la",
+    });
+  });
+
+  it("returns to the original input after the newest match on ArrowDown", () => {
+    expect(navigateHistoryMatches(matches, 0, 1)).toEqual({
+      index: -1,
+      value: null,
+    });
   });
 });
