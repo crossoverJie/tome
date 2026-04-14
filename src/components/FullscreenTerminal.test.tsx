@@ -1202,6 +1202,113 @@ describe("FullscreenTerminal", () => {
     expect(onData).toHaveBeenCalledWith("\x1b[13;2u");
   });
 
+  it("clears the hidden textarea context and probes cursor after Cmd+Left in Claude fullscreen input", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind="claude"
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    textarea.value = "创建 PR";
+    textarea.selectionStart = textarea.value.length;
+    textarea.selectionEnd = textarea.value.length;
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.write.mockClear();
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "ArrowLeft",
+      metaKey: true,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(onData).toHaveBeenCalledWith("\x01");
+    expect(textarea.value).toBe("");
+    expect(textarea.selectionStart).toBe(0);
+    expect(textarea.selectionEnd).toBe(0);
+
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(terminalMocks.write).toHaveBeenCalledWith("\x1b[6n");
+  });
+
+  it("defers the keyboard cursor probe until composition ends", () => {
+    const onData = vi.fn();
+    const { container } = render(
+      <FullscreenTerminal
+        sessionId={"session-1"}
+        visible={true}
+        isFocused={true}
+        startOffset={0}
+        onData={onData}
+        onResize={vi.fn()}
+        onReady={vi.fn()}
+        rawOutput={"hello"}
+        aiAgentKind="claude"
+      />
+    );
+
+    const terminalElement = container.firstElementChild as HTMLDivElement;
+    const textarea = document.createElement("textarea");
+    terminalElement.appendChild(textarea);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    terminalMocks.write.mockClear();
+
+    act(() => {
+      textarea.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+
+    const handled = getCustomKeyHandler()({
+      type: "keydown",
+      key: "ArrowLeft",
+      metaKey: true,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+    } as KeyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(onData).toHaveBeenCalledWith("\x01");
+
+    act(() => {
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(terminalMocks.write).not.toHaveBeenCalledWith("\x1b[6n");
+
+    act(() => {
+      textarea.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+      vi.advanceTimersByTime(16);
+    });
+
+    expect(terminalMocks.write).toHaveBeenCalledWith("\x1b[6n");
+  });
+
   it("uses direct cursor policy for codex Option+click (not staged like claude)", () => {
     terminalMocks.buffer.active.cursorX = 10;
     terminalMocks.buffer.active.cursorY = 4;

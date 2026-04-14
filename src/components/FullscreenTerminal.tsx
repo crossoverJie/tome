@@ -510,6 +510,8 @@ export function FullscreenTerminal({
   const claudeRetryTimeoutRef = useRef<number | null>(null);
   const activationFrameRef = useRef<number | null>(null);
   const isComposingRef = useRef(false);
+  const pendingKeyboardCursorProbeRef = useRef(false);
+  const keyboardCursorProbeTimeoutRef = useRef<number | null>(null);
   const writeDiagnosticsRef = useRef({
     bytes: 0,
     chunks: 0,
@@ -643,6 +645,13 @@ export function FullscreenTerminal({
     }
   }, []);
 
+  const clearKeyboardCursorProbeTimeout = useCallback(() => {
+    if (keyboardCursorProbeTimeoutRef.current !== null) {
+      window.clearTimeout(keyboardCursorProbeTimeoutRef.current);
+      keyboardCursorProbeTimeoutRef.current = null;
+    }
+  }, []);
+
   const reportTerminalCursor = useCallback(
     async (setAnchor: boolean) => {
       if (
@@ -722,6 +731,39 @@ export function FullscreenTerminal({
     },
     [sessionId]
   );
+
+  const resetAiTextareaInputContext = useCallback(() => {
+    const textarea = textareaListenersRef.current?.textarea;
+    if (textarea) {
+      textarea.value = "";
+      textarea.selectionStart = 0;
+      textarea.selectionEnd = 0;
+    }
+    recentXtermDataRef.current = [];
+  }, []);
+
+  const scheduleKeyboardCursorProbe = useCallback(() => {
+    clearKeyboardCursorProbeTimeout();
+    pendingKeyboardCursorProbeRef.current = false;
+    keyboardCursorProbeTimeoutRef.current = window.setTimeout(() => {
+      keyboardCursorProbeTimeoutRef.current = null;
+      requestCursorProbe(false);
+    }, 16);
+  }, [clearKeyboardCursorProbeTimeout, requestCursorProbe]);
+
+  const syncAiCursorAfterKeyboardMove = useCallback(() => {
+    resetAiTextareaInputContext();
+    if (isComposingRef.current) {
+      pendingKeyboardCursorProbeRef.current = true;
+      clearKeyboardCursorProbeTimeout();
+      return;
+    }
+    scheduleKeyboardCursorProbe();
+  }, [
+    clearKeyboardCursorProbeTimeout,
+    resetAiTextareaInputContext,
+    scheduleKeyboardCursorProbe,
+  ]);
 
   const handleTerminalMouseUp = useCallback(
     (event: MouseEvent) => {
@@ -1053,10 +1095,16 @@ export function FullscreenTerminal({
       }
       if (event.metaKey && event.key === "ArrowLeft") {
         onData("\x01");
+        if (isAiAgentFullscreenInput(aiAgentKind)) {
+          syncAiCursorAfterKeyboardMove();
+        }
         return false;
       }
       if (event.metaKey && event.key === "ArrowRight") {
         onData("\x05");
+        if (isAiAgentFullscreenInput(aiAgentKind)) {
+          syncAiCursorAfterKeyboardMove();
+        }
         return false;
       }
       if (event.shiftKey && event.key === "Enter" && isAiAgentFullscreenInput(aiAgentKind)) {
@@ -1087,9 +1135,16 @@ export function FullscreenTerminal({
         };
         const compositionstartHandler = (): void => {
           isComposingRef.current = true;
+          if (keyboardCursorProbeTimeoutRef.current !== null) {
+            pendingKeyboardCursorProbeRef.current = true;
+            clearKeyboardCursorProbeTimeout();
+          }
         };
         const compositionendHandler = (): void => {
           isComposingRef.current = false;
+          if (pendingKeyboardCursorProbeRef.current) {
+            scheduleKeyboardCursorProbe();
+          }
         };
         const inputHandler = (e: Event): void => {
           if (!(e instanceof InputEvent)) return;
@@ -1143,6 +1198,8 @@ export function FullscreenTerminal({
       clearClaudeRetryTimeout();
       pendingProbeRef.current = null;
       clearActivationFrame();
+      clearKeyboardCursorProbeTimeout();
+      pendingKeyboardCursorProbeRef.current = false;
 
       // Remove textarea event listeners
       if (textareaListenersRef.current) {
@@ -1170,6 +1227,7 @@ export function FullscreenTerminal({
     };
   }, [
     clearActivationFrame,
+    clearKeyboardCursorProbeTimeout,
     clearClaudeRetryTimeout,
     flushPendingWrites,
     handleTerminalMouseMove,
@@ -1178,6 +1236,7 @@ export function FullscreenTerminal({
     aiAgentKind,
     requestCursorProbe,
     sessionId,
+    syncAiCursorAfterKeyboardMove,
   ]);
 
   useEffect(() => {
@@ -1250,6 +1309,8 @@ export function FullscreenTerminal({
     } else if (sessionId) {
       clearActivationFrame();
       clearClaudeRetryTimeout();
+      clearKeyboardCursorProbeTimeout();
+      pendingKeyboardCursorProbeRef.current = false;
       flushPendingWrites("deactivate");
       isHydratedRef.current = false;
       flushWriteDiagnostics("deactivate", true);
@@ -1262,6 +1323,7 @@ export function FullscreenTerminal({
     }
   }, [
     clearActivationFrame,
+    clearKeyboardCursorProbeTimeout,
     clearClaudeRetryTimeout,
     createTerminalDiagnosticsSnapshot,
     fitTerminal,
