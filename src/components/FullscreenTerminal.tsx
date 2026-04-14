@@ -759,11 +759,7 @@ export function FullscreenTerminal({
       return;
     }
     scheduleKeyboardCursorProbe();
-  }, [
-    clearKeyboardCursorProbeTimeout,
-    resetAiTextareaInputContext,
-    scheduleKeyboardCursorProbe,
-  ]);
+  }, [clearKeyboardCursorProbeTimeout, resetAiTextareaInputContext, scheduleKeyboardCursorProbe]);
 
   const handleTerminalMouseUp = useCallback(
     (event: MouseEvent) => {

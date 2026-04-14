@@ -40,9 +40,8 @@ export const TabBar = memo(function TabBar({
             className={`tab-item ${tab.id === activeTabId ? "active" : ""} ${isBusy ? "busy" : ""}`}
             onClick={() => onSwitchTab(tab.id)}
           >
-            <span className="tab-title">
-              {isBusy ? `● ${busyCommand}` : `${tab.title} ${index + 1}`}
-            </span>
+            <span className="tab-title">{isBusy ? `● ${busyCommand}` : tab.title}</span>
+            {!isBusy && index < 9 && <span className="tab-shortcut">⌘{index + 1}</span>}
             <button
               className="tab-close"
               onClick={(e) => handleClose(e, tab.id)}

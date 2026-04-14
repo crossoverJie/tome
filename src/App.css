@@ -1014,6 +1014,17 @@ body {
   color: var(--text-primary);
 }
 
+.tab-shortcut {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+  transition: color 0.15s;
+}
+
+.tab-item:hover .tab-shortcut {
+  color: var(--text-secondary);
+}
+
 .tab-content {
   display: flex;
   flex: 1;
