@@ -42,6 +42,7 @@
 - [x] 基本编辑快捷键（Cmd+A/C/V/X, Option+←/→）
 - [x] 回车提交命令（通过 IPC 写入 PTY）
 - [x] 命令历史浏览（↑/↓）
+- [x] 历史导航模式优化（空输入时保留完整历史浏览）
 - [x] 命令语法高亮（commands/arguments/paths/strings/variables 区分颜色）
   - [x] CodeMirror 6 stream parser 实现基础 shell 语法高亮
   - [x] 定义 syntax highlighter 主题 tokens（command/argument/path/string/variable/operator）
@@ -49,13 +50,17 @@
   - [x] 命令存在性验证（无效命令显示红色警告）
     - [x] Rust 后端缓存 PATH 目录列表并提供 IPC 查询接口
     - [x] 前端异步验证命令存在性
+  - [x] 命令存在性验证改进（识别 shell 别名和函数）
 
 ### 1.6 前端 — 全屏程序模式
 - [x] xterm.js 集成（隐藏状态）
 - [x] 收到 alternate screen 事件时切换到 xterm.js 全屏视图
 - [x] 退出全屏程序后恢复 Block 视图
 - [x] 全屏模式下键盘输入直通 PTY
-- [x] **全屏模式快捷键：Cmd+Backspace (Cmd+Del) 删除到行首**
+- [x] 全屏模式快捷键：Cmd+Backspace (Cmd+Del) 删除到行首
+- [x] 全屏模式快捷键：Cmd+←/→ 跳转到行首/行尾
+- [x] 全屏模式快捷键：Shift+Enter 软换行
+- [x] 中文输入法标点符号支持（防止重复输入）
 
 ### 1.7 智能光标定位（CLI 工具输入行鼠标支持，仅输入场景）
 - [x] Rust 后端维护虚拟屏幕缓冲区（Screen Buffer），实时追踪字符位置与光标坐标
@@ -64,6 +69,7 @@
 - [x] 向 PTY 发送对应数量的方向键转义序列（`\e[A/B/C/D`）模拟光标移动
 - [x] 通过 `\e[6n`（Cursor Position Report）校准实际光标位置
 - [x] 识别 prompt 前缀（不可编辑区域）防止光标越界
+- [x] Claude/Codex 等 AI 工具光标同步优化
 
 ### 1.8 Shell Integration
 - [x] zsh shell integration 脚本编写（precmd/preexec hook）
@@ -102,13 +108,13 @@
 - [x] Tab 补全（首版支持 zsh 的基础命令 / 路径补全与简单候选菜单，Warp-style 结构化补全仍待后续增强）
 - [x] Tab 补全忽略大小写（如 `cd Doc` 和 `cd doc` 都能提示 `Documents` 目录）
 - [x] 命令历史持久化与浏览（使用 Tauri FS API 保存到应用数据目录）
+- [x] 历史导航模式优化（空输入时保留完整历史浏览）
 
 ### 2.5 Shell Integration 扩展
 - [ ] bash shell integration 支持
 - [ ] fish shell integration 支持
 
 ### 2.6 窗口切换器
-
 - [ ] Rust 后端维护全局窗口注册表（窗口创建/销毁同步）
 - [ ] 暴露 `get_windows()` IPC 命令获取窗口列表
 - [ ] 广播 `windows-changed` 事件通知状态变化
@@ -118,7 +124,7 @@
 - [ ] 窗口元数据上报（标题、目录、标签页数、活跃命令）
 - [ ] 【可选】缩略图生成与同步（完整版）
 
-### 2.7 Shell Integration 扩展
+### 2.7 通知
 - [ ] 长时间命令完成后发送 macOS 系统通知
 
 ---
@@ -143,11 +149,37 @@
 
 ### 3.4 其他
 - [x] 工作目录追踪（标题栏/标签页显示 pwd）
-- [ ] 输出中 URL 链接检测与点击
+- [x] Git 分支显示（输入编辑器 prompt 显示当前分支）
+- [x] 输出中 URL 链接检测与点击
 - [ ] iTerm2 内联图片协议支持（Sixel）
 - [ ] 大输出 Block 虚拟滚动性能优化
+- [x] Running Block 内联进度输出降噪
+- [x] 输出链接检测与交互（可点击 URL）
+- [x] 进度条回车处理（`\r`）
 
-### 3.5 构建与分发
+### 3.5 全屏终端增强
+- [x] Cmd+Backspace (Cmd+Del) 删除到行首
+- [x] Cmd+←/→ 跳转到行首/行尾
+- [x] Shift+Enter 软换行
+- [x] 中文输入法标点符号支持（防止重复输入）
+- [x] 智能光标定位（鼠标点击移动光标）
+- [x] 全屏终端选择复制改进
+- [x] Claude/Codex AI CLI 兼容层
+- [x] 多 Pane 全屏状态独立管理
+- [x] WebKit 白屏问题修复
+
+### 3.6 Running Block 增强
+- [x] Warp-style 交互式 Running Block
+- [x] Running Block 控制移交（AI 工具等交互式命令）
+- [x] REPL 和 TTY 工具支持
+- [x] Sticky Header（滚动时固定显示）
+- [x] 右侧忙碌指示器
+- [x] 内联进度输出降噪
+
+### 3.7 Tab Bar 增强
+- [x] 键盘快捷键提示（显示 Cmd+数字）
+
+### 3.8 构建与分发
 - [x] GitHub Actions workflow 搭建（基于 `tauri-apps/tauri-action`）
 - [ ] 支持 macOS 双架构构建（x86_64 + aarch64）或 Universal Binary
 - [ ] Release tag 触发自动构建，上传 `.dmg` 到 GitHub Releases
