@@ -6,6 +6,7 @@ import { InputEditor } from "./InputEditor";
 import { RunningCommandBar } from "./RunningCommandBar";
 import { FullscreenTerminal } from "./FullscreenTerminal";
 import { SearchOverlay } from "./SearchOverlay";
+import { AgentLogoBadge } from "./AgentLogoBadge";
 import { useTerminalSession } from "../hooks/useTerminalSession";
 import { logDiagnostics } from "../utils/diagnostics";
 import { getDirectoryLabel } from "../utils/workdir";
@@ -392,6 +393,11 @@ export function PaneView({
           />
         </div>
       </div>
+      <AgentLogoBadge
+        aiAgentKind={aiAgentKind}
+        isFocused={isFocused}
+        isFullscreenTerminalActive={isFullscreenTerminalActive}
+      />
     </div>
   );
 }
