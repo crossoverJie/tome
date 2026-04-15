@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { TabBar } from "./TabBar";
 import type { Tab } from "../types/tab";
 import { createTab } from "../types/tab";
+import type { TabPresentation } from "../utils/agentStatus";
 
 function makeTabs(count: number): Tab[] {
   return Array.from({ length: count }, (_, i) => createTab(`tab-${i + 1}`, `pane-${i + 1}`));
@@ -96,5 +97,92 @@ describe("TabBar", () => {
     );
     fireEvent.click(screen.getByLabelText("New tab"));
     expect(onCreateTab).toHaveBeenCalledOnce();
+  });
+
+  it("renders custom labels from tabPresentations", () => {
+    const tabs = makeTabs(2);
+    const tabPresentations = new Map<string, TabPresentation>([
+      ["tab-1", { label: "tome · cc", tooltip: "/home/user/tome\nRunning: Claude" }],
+      ["tab-2", { label: "api · cx", tooltip: "/home/user/api\nRunning: Codex" }],
+    ]);
+
+    render(
+      <TabBar
+        tabs={tabs}
+        activeTabId="tab-1"
+        onSwitchTab={() => {}}
+        onCreateTab={() => {}}
+        onCloseTab={() => {}}
+        tabPresentations={tabPresentations}
+      />
+    );
+
+    expect(screen.getByText("tome · cc")).toBeTruthy();
+    expect(screen.getByText("api · cx")).toBeTruthy();
+  });
+
+  it("sets tooltip from tabPresentations", () => {
+    const tabs = makeTabs(2);
+    const tabPresentations = new Map<string, TabPresentation>([
+      ["tab-1", { label: "tome · cc", tooltip: "/home/user/tome\nRunning: Claude" }],
+      ["tab-2", { label: "api", tooltip: "/home/user/api" }],
+    ]);
+
+    const { container } = render(
+      <TabBar
+        tabs={tabs}
+        activeTabId="tab-1"
+        onSwitchTab={() => {}}
+        onCreateTab={() => {}}
+        onCloseTab={() => {}}
+        tabPresentations={tabPresentations}
+      />
+    );
+
+    const tabItems = container.querySelectorAll(".tab-item");
+    expect(tabItems[0].getAttribute("title")).toBe("/home/user/tome\nRunning: Claude");
+    expect(tabItems[1].getAttribute("title")).toBe("/home/user/api");
+  });
+
+  it("falls back to tab.title when tabPresentations is not provided", () => {
+    const tabs = [
+      { ...createTab("tab-1", "pane-1"), title: "Custom Title 1" },
+      { ...createTab("tab-2", "pane-2"), title: "Custom Title 2" },
+    ];
+
+    render(
+      <TabBar
+        tabs={tabs}
+        activeTabId="tab-1"
+        onSwitchTab={() => {}}
+        onCreateTab={() => {}}
+        onCloseTab={() => {}}
+      />
+    );
+
+    expect(screen.getByText("Custom Title 1")).toBeTruthy();
+    expect(screen.getByText("Custom Title 2")).toBeTruthy();
+  });
+
+  it("falls back to tab.title when tabPresentations entry is missing", () => {
+    const tabs = [
+      { ...createTab("tab-1", "pane-1"), title: "Custom Title 1" },
+      { ...createTab("tab-2", "pane-2"), title: "Custom Title 2" },
+    ];
+    const tabPresentations = new Map<string, TabPresentation>();
+
+    render(
+      <TabBar
+        tabs={tabs}
+        activeTabId="tab-1"
+        onSwitchTab={() => {}}
+        onCreateTab={() => {}}
+        onCloseTab={() => {}}
+        tabPresentations={tabPresentations}
+      />
+    );
+
+    expect(screen.getByText("Custom Title 1")).toBeTruthy();
+    expect(screen.getByText("Custom Title 2")).toBeTruthy();
   });
 });

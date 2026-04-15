@@ -4,6 +4,7 @@ import type {
   InteractiveSessionKind,
   AiAgentKind,
 } from "../utils/fullscreenSessionState";
+import type { PaneAgentState } from "../utils/agentStatus";
 
 interface SessionState {
   sessionId: string;
@@ -31,6 +32,9 @@ const sessionStateRegistry = new Map<string, SessionState>();
 const paneToSessionMap = new Map<string, string>();
 const paneSessionInitOptionsRegistry = new Map<string, PaneSessionInitOptions>();
 
+// Pane-level agent state registry - tracks active AI agents per pane
+const paneAgentStateRegistry = new Map<string, PaneAgentState>();
+
 export function getSessionState(sessionId: string): SessionState | undefined {
   return sessionStateRegistry.get(sessionId);
 }
@@ -56,6 +60,8 @@ export function setSessionIdForPane(paneId: string, sessionId: string): void {
 
 export function removePaneMapping(paneId: string): void {
   paneToSessionMap.delete(paneId);
+  // Also clean up agent state when pane is removed
+  paneAgentStateRegistry.delete(paneId);
 }
 
 export function setPaneSessionInitOptions(paneId: string, options: PaneSessionInitOptions): void {
@@ -80,8 +86,36 @@ export function removeSessionState(sessionId: string): void {
   sessionStateRegistry.delete(sessionId);
 }
 
+// Pane agent state management
+export function getPaneAgentState(paneId: string): PaneAgentState | undefined {
+  return paneAgentStateRegistry.get(paneId);
+}
+
+export function setPaneAgentState(paneId: string, state: PaneAgentState): void {
+  paneAgentStateRegistry.set(paneId, state);
+}
+
+export function updatePaneAgentState(paneId: string, updates: Partial<PaneAgentState>): void {
+  const existing = paneAgentStateRegistry.get(paneId);
+  if (existing) {
+    paneAgentStateRegistry.set(paneId, { ...existing, ...updates });
+  } else {
+    // Create new state with defaults if not exists
+    paneAgentStateRegistry.set(paneId, {
+      aiAgentKind: null,
+      isActive: false,
+      ...updates,
+    });
+  }
+}
+
+export function removePaneAgentState(paneId: string): void {
+  paneAgentStateRegistry.delete(paneId);
+}
+
 export function clearAllSessionState(): void {
   sessionStateRegistry.clear();
   paneToSessionMap.clear();
   paneSessionInitOptionsRegistry.clear();
+  paneAgentStateRegistry.clear();
 }

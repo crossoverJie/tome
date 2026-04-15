@@ -9,6 +9,7 @@ import { SearchOverlay } from "./SearchOverlay";
 import { useTerminalSession } from "../hooks/useTerminalSession";
 import { logDiagnostics } from "../utils/diagnostics";
 import { getDirectoryLabel } from "../utils/workdir";
+import type { AiAgentKind } from "../utils/fullscreenSessionState";
 
 interface PaneViewProps {
   paneId: string;
@@ -16,6 +17,7 @@ interface PaneViewProps {
   isFocused: boolean;
   onFocus: () => void;
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
+  onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
 }
 
@@ -31,6 +33,7 @@ export function PaneView({
   isFocused,
   onFocus,
   onWorkingDirectoryChange,
+  onAgentStateChange,
   onOpenPathInNewTab,
 }: PaneViewProps) {
   const {
@@ -128,6 +131,13 @@ export function PaneView({
   useEffect(() => {
     onWorkingDirectoryChange(paneId, currentDirectory);
   }, [paneId, currentDirectory, onWorkingDirectoryChange]);
+
+  // Notify parent of agent state changes
+  useEffect(() => {
+    if (onAgentStateChange) {
+      onAgentStateChange(paneId, aiAgentKind, isFullscreenTerminalActive);
+    }
+  }, [paneId, aiAgentKind, isFullscreenTerminalActive, onAgentStateChange]);
 
   useEffect(() => {
     logDiagnostics("PaneView", "mount", createPaneDiagnosticsSnapshot("mount"));

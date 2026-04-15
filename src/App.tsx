@@ -5,9 +5,19 @@ import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
 import { useTabs } from "./hooks/useTabs";
-import { setPaneSessionInitOptions } from "./hooks/sessionState";
+import {
+  setPaneSessionInitOptions,
+  setPaneAgentState,
+  removePaneAgentState,
+} from "./hooks/sessionState";
 import { getRootDiagnosticsSnapshot, logDiagnostics } from "./utils/diagnostics";
-import { getTabCurrentDirectory, getTabDisplayTitle, getWindowTitle } from "./utils/workdir";
+import { getTabCurrentDirectory, getDirectoryLabel } from "./utils/workdir";
+import {
+  aggregateTabAgentSummary,
+  createTabPresentation,
+  type PaneAgentState,
+} from "./utils/agentStatus";
+import type { AiAgentKind } from "./utils/fullscreenSessionState";
 import "./App.css";
 
 function App() {
@@ -34,6 +44,8 @@ function App() {
     Map<string, { index: number | null; blocks: unknown[] }>
   >(new Map());
   const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
+  // Track pane agent states for tab agent status display
+  const [paneAgentMap, setPaneAgentMap] = useState<Map<string, PaneAgentState>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const latestAppSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const totalPaneCount = useMemo(
@@ -86,15 +98,48 @@ function App() {
     []
   );
 
-  const displayTabs = useMemo(
-    () => tabs.map((tab) => ({ ...tab, title: getTabDisplayTitle(tab, paneDirectoryMap) })),
-    [tabs, paneDirectoryMap]
+  // Handle agent state changes from panes
+  const handleAgentStateChange = useCallback(
+    (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => {
+      setPaneAgentMap((prev) => {
+        const next = new Map(prev);
+        if (isActive && aiAgentKind !== null) {
+          const state: PaneAgentState = { aiAgentKind, isActive: true };
+          next.set(paneId, state);
+          // Also persist to session state
+          setPaneAgentState(paneId, state);
+        } else {
+          next.delete(paneId);
+          removePaneAgentState(paneId);
+        }
+        return next;
+      });
+    },
+    []
   );
+
+  // Aggregate tab agent summaries and create presentations
+  const tabPresentations = useMemo(() => {
+    const presentations = new Map<string, { label: string; tooltip: string }>();
+    for (const tab of tabs) {
+      const summary = aggregateTabAgentSummary(tab, paneAgentMap);
+      const dirPath = getTabCurrentDirectory(tab, paneDirectoryMap);
+      const dirName = dirPath ? getDirectoryLabel(dirPath) : "Shell";
+      const presentation = createTabPresentation(dirName, dirPath, summary);
+      presentations.set(tab.id, presentation);
+    }
+    return presentations;
+  }, [tabs, paneAgentMap, paneDirectoryMap]);
 
   const activeTabCurrentDirectory = useMemo(
     () => getTabCurrentDirectory(activeTab, paneDirectoryMap),
     [activeTab, paneDirectoryMap]
   );
+
+  // Get window title from current directory (without agent tokens)
+  const windowTitle = useMemo(() => {
+    return activeTabCurrentDirectory ? `${activeTabCurrentDirectory} — Tome` : "Tome";
+  }, [activeTabCurrentDirectory]);
 
   const handleSplitPane = useCallback(
     (direction: "horizontal" | "vertical") => {
@@ -255,17 +300,29 @@ function App() {
       }
       return newMap;
     });
+
+    // Clean up pane agent states for closed panes
+    setPaneAgentMap((prev) => {
+      const newMap = new Map(prev);
+      for (const paneId of newMap.keys()) {
+        if (!allPaneIds.has(paneId)) {
+          newMap.delete(paneId);
+          removePaneAgentState(paneId);
+        }
+      }
+      return newMap;
+    });
   }, [tabs]);
 
   useEffect(() => {
-    const title = getWindowTitle(activeTabCurrentDirectory);
+    const title = windowTitle;
     document.title = title;
     void getCurrentWindow()
       .setTitle(title)
       .catch((error) => {
         console.error("Failed to update window title", error);
       });
-  }, [activeTabCurrentDirectory]);
+  }, [windowTitle]);
 
   useEffect(() => {
     logDiagnostics("App", "mount", createAppDiagnosticsSnapshot("mount"));
@@ -315,11 +372,12 @@ function App() {
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
       <TabBar
-        tabs={displayTabs}
+        tabs={tabs}
         activeTabId={activeTabId}
         onSwitchTab={switchTab}
         onCreateTab={createTab}
         onCloseTab={closeTab}
+        tabPresentations={tabPresentations}
       />
       {tabs.map((tab) => (
         <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
@@ -330,6 +388,7 @@ function App() {
             onFocusPane={focusPane}
             onUpdateSplitRatio={updateSplitRatio}
             onWorkingDirectoryChange={handleWorkingDirectoryChange}
+            onAgentStateChange={handleAgentStateChange}
             onOpenPathInNewTab={createTabWithCwd}
           />
         </div>

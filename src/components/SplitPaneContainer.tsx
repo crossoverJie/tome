@@ -3,6 +3,7 @@ import type { PaneNode } from "../types/pane";
 import { PaneView } from "./PaneView";
 import { Resizer } from "./Resizer";
 import { computePaneLayout } from "../utils/paneLayout";
+import type { AiAgentKind } from "../utils/fullscreenSessionState";
 
 interface SplitPaneContainerProps {
   paneId: string;
@@ -11,6 +12,7 @@ interface SplitPaneContainerProps {
   onFocusPane: (paneId: string) => void;
   onUpdateSplitRatio: (paneId: string, ratio: number) => void;
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
+  onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
   style?: React.CSSProperties;
 }
@@ -22,6 +24,7 @@ export function SplitPaneContainer({
   onFocusPane,
   onUpdateSplitRatio,
   onWorkingDirectoryChange,
+  onAgentStateChange,
   onOpenPathInNewTab,
   style,
 }: SplitPaneContainerProps) {
@@ -77,6 +80,7 @@ export function SplitPaneContainer({
               isFocused={focusedPaneId === leaf.paneId}
               onFocus={() => onFocusPane(leaf.paneId)}
               onWorkingDirectoryChange={onWorkingDirectoryChange}
+              onAgentStateChange={onAgentStateChange}
               onOpenPathInNewTab={onOpenPathInNewTab}
             />
           </div>
