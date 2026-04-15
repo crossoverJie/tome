@@ -1,5 +1,6 @@
 import { memo, useCallback } from "react";
 import type { Tab } from "../types/tab";
+import type { TabPresentation } from "../utils/agentStatus";
 
 interface TabBarProps {
   tabs: Tab[];
@@ -7,7 +8,7 @@ interface TabBarProps {
   onSwitchTab: (tabId: string) => void;
   onCreateTab: () => void;
   onCloseTab: (tabId: string) => void;
-  busyTabs?: Map<string, string | null>; // tabId -> command or null
+  tabPresentations?: Map<string, TabPresentation>; // tabId -> presentation (label, tooltip)
 }
 
 export const TabBar = memo(function TabBar({
@@ -16,7 +17,7 @@ export const TabBar = memo(function TabBar({
   onSwitchTab,
   onCreateTab,
   onCloseTab,
-  busyTabs,
+  tabPresentations,
 }: TabBarProps) {
   // Only show tab bar when there are multiple tabs
   if (tabs.length <= 1) return null;
@@ -32,16 +33,18 @@ export const TabBar = memo(function TabBar({
   return (
     <div className="tab-bar">
       {tabs.map((tab, index) => {
-        const busyCommand = busyTabs?.get(tab.id);
-        const isBusy = busyCommand !== undefined && busyCommand !== null;
+        const presentation = tabPresentations?.get(tab.id);
+        const displayLabel = presentation?.label ?? tab.title;
+        const tooltip = presentation?.tooltip ?? tab.title;
         return (
           <div
             key={tab.id}
-            className={`tab-item ${tab.id === activeTabId ? "active" : ""} ${isBusy ? "busy" : ""}`}
+            className={`tab-item ${tab.id === activeTabId ? "active" : ""}`}
             onClick={() => onSwitchTab(tab.id)}
+            title={tooltip}
           >
-            <span className="tab-title">{isBusy ? `● ${busyCommand}` : tab.title}</span>
-            {!isBusy && index < 9 && <span className="tab-shortcut">⌘{index + 1}</span>}
+            <span className="tab-title">{displayLabel}</span>
+            {index < 9 && <span className="tab-shortcut">⌘{index + 1}</span>}
             <button
               className="tab-close"
               onClick={(e) => handleClose(e, tab.id)}
