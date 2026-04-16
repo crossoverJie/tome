@@ -86,6 +86,31 @@ export function removeSessionState(sessionId: string): void {
   sessionStateRegistry.delete(sessionId);
 }
 
+// Raw output tracking for menu bar agent overview
+const paneRawOutputRegistry = new Map<string, string>();
+const paneLastActivityRegistry = new Map<string, number>();
+
+export function setPaneRawOutput(paneId: string, output: string): void {
+  paneRawOutputRegistry.set(paneId, output);
+}
+
+export function getPaneRawOutput(paneId: string): string | undefined {
+  return paneRawOutputRegistry.get(paneId);
+}
+
+export function updatePaneActivity(paneId: string): void {
+  paneLastActivityRegistry.set(paneId, Date.now());
+}
+
+export function getPaneLastActivity(paneId: string): number | undefined {
+  return paneLastActivityRegistry.get(paneId);
+}
+
+export function removePaneOutputAndActivity(paneId: string): void {
+  paneRawOutputRegistry.delete(paneId);
+  paneLastActivityRegistry.delete(paneId);
+}
+
 // Pane agent state management
 export function getPaneAgentState(paneId: string): PaneAgentState | undefined {
   return paneAgentStateRegistry.get(paneId);

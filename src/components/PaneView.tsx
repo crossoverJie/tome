@@ -380,6 +380,7 @@ export function PaneView({
         )}
         <div className="pane-fullscreen-body">
           <FullscreenTerminal
+            paneId={paneId}
             sessionId={activeSessionId}
             visible={isFullscreenTerminalActive}
             isFocused={isFocused}

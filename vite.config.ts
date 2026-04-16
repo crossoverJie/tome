@@ -29,4 +29,6 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  // Support SPA routing - fallback to index.html for all routes
+  appType: "spa",
 }));

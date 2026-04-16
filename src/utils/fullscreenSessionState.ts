@@ -7,6 +7,13 @@ export type FullscreenMode = "interactive" | "alternate" | null;
 export type FullscreenLifecycle = "inactive" | "activating" | "active" | "resizing";
 export type FullscreenInteractionState = "inactive" | "active";
 
+// Conversation round for tracking user input and agent response
+export interface ConversationRound {
+  user_input: string;
+  agent_response: string;
+  timestamp: number;
+}
+
 export interface FullscreenSessionState {
   mode: FullscreenMode;
   lifecycle: FullscreenLifecycle;

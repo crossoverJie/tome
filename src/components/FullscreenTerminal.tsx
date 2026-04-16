@@ -6,6 +6,13 @@ import { FitAddon } from "@xterm/addon-fit";
 import { getRootDiagnosticsSnapshot, logDiagnostics } from "../utils/diagnostics";
 import { findOutputLinks } from "../utils/outputLinks";
 import type { AiAgentKind } from "../utils/fullscreenSessionState";
+import {
+  cleanAnsiSequences,
+  cleanControlCharacters,
+  cleanUserInput,
+  cleanAgentResponse,
+} from "../utils/windowSnapshot";
+import { updatePaneAgentState, getPaneAgentState } from "../hooks/sessionState";
 import "@xterm/xterm/css/xterm.css";
 
 const FULLSCREEN_SCROLLBACK_LINES = 1000;
@@ -465,6 +472,7 @@ function shouldForwardTextareaInput(
 }
 
 interface FullscreenTerminalProps {
+  paneId: string;
   sessionId: string | null;
   visible: boolean;
   isFocused: boolean;
@@ -480,6 +488,7 @@ interface FullscreenTerminalProps {
 }
 
 export function FullscreenTerminal({
+  paneId,
   sessionId,
   visible,
   isFocused,
@@ -516,6 +525,15 @@ export function FullscreenTerminal({
     bytes: 0,
     chunks: 0,
     lastLoggedAt: 0,
+  });
+  // Conversation tracking refs
+  const conversationTrackingRef = useRef({
+    isWaitingForUserInput: false,
+    lastOutputEndOffset: 0,
+    outputSettleTimeout: null as number | null,
+    pendingUserInput: null as string | null,
+    captureStartOffset: 0,
+    captureStartRow: undefined as number | undefined,
   });
   const textareaListenersRef = useRef<{
     textarea: HTMLTextAreaElement;
@@ -557,6 +575,156 @@ export function FullscreenTerminal({
           },
     [getRawOutputSnapshot, rawOutput, rawOutputBaseOffset]
   );
+
+  // Conversation tracking helpers
+  const clearOutputSettleTimeout = useCallback(() => {
+    if (conversationTrackingRef.current.outputSettleTimeout !== null) {
+      window.clearTimeout(conversationTrackingRef.current.outputSettleTimeout);
+      conversationTrackingRef.current.outputSettleTimeout = null;
+    }
+  }, []);
+
+  const getCurrentLineFromTerminal = useCallback((): string => {
+    const terminal = terminalRef.current;
+    if (!terminal) return "";
+
+    const { cursorY } = terminal.buffer.active;
+    const line = terminal.buffer.active.getLine(cursorY);
+    if (!line) return "";
+
+    // Get the text from the current line and clean it
+    const lineText = line.translateToString(true);
+    let cleaned = cleanAnsiSequences(lineText);
+    cleaned = cleanControlCharacters(cleaned);
+    return cleanUserInput(cleaned);
+  }, []);
+
+  const handleConversationUserInput = useCallback(
+    (inputData: string) => {
+      if (!isAiAgentFullscreenInput(aiAgentKind)) return;
+
+      // Check if this looks like a submit (Enter key)
+      if (inputData === "\r" || inputData === "\n" || inputData === "\r\n") {
+        const currentLine = getCurrentLineFromTerminal();
+        const terminal = terminalRef.current;
+        console.log("[FullscreenTerminal] User input detected:", { paneId, currentLine, isWaitingForUserInput: conversationTrackingRef.current.isWaitingForUserInput });
+        if (currentLine && !conversationTrackingRef.current.isWaitingForUserInput) {
+          // Start tracking a new conversation round
+          conversationTrackingRef.current.isWaitingForUserInput = true;
+          conversationTrackingRef.current.pendingUserInput = currentLine;
+          conversationTrackingRef.current.captureStartOffset = rawOutputRef.current.length;
+          // Record the buffer row where response starts (next line after input)
+          conversationTrackingRef.current.captureStartRow = terminal ? terminal.buffer.active.cursorY + 1 : undefined;
+
+          clearOutputSettleTimeout();
+        }
+      }
+    },
+    [aiAgentKind, getCurrentLineFromTerminal, clearOutputSettleTimeout]
+  );
+
+  const settleAgentResponse = useCallback(() => {
+    if (
+      !conversationTrackingRef.current.isWaitingForUserInput ||
+      !conversationTrackingRef.current.pendingUserInput
+    ) {
+      return;
+    }
+
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      conversationTrackingRef.current.isWaitingForUserInput = false;
+      conversationTrackingRef.current.pendingUserInput = null;
+      conversationTrackingRef.current.outputSettleTimeout = null;
+      return;
+    }
+
+    const userInput = conversationTrackingRef.current.pendingUserInput;
+    const { cursorY } = terminal.buffer.active;
+
+    // Extract visible text from terminal buffer
+    const responseLines: string[] = [];
+
+    // Scan through visible buffer lines to find the response
+    // Start from the capture start row (where user input was) and go to current cursor position
+    const startRow = conversationTrackingRef.current.captureStartRow ?? 0;
+    const endRow = cursorY;
+
+    for (let row = startRow; row <= endRow; row++) {
+      const line = terminal.buffer.active.getLine(row);
+      if (!line) continue;
+
+      const lineText = line.translateToString(true).trim();
+      if (!lineText) continue;
+
+      // Skip the user input line itself
+      const cleanedLine = lineText.replace(/[❯$#>➜\s]/g, '').trim();
+      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, '').trim();
+      if (cleanedLine === cleanedUserInput) continue;
+
+      // Skip lines that are just decorative or status indicators
+      if (/^[✢✻✶✳✽⎿·~}\{\(\)_\-…◐\/\\]+$/.test(lineText)) continue;
+      if (/^[─━═\-\s]+$/.test(lineText)) continue;
+
+      responseLines.push(lineText);
+    }
+
+    let cleanedResponse = responseLines.join('\n').trim();
+
+    // Additional cleaning for Claude's output
+    cleanedResponse = cleanAgentResponse(cleanedResponse, userInput);
+
+    // Truncate if too long
+    const MAX_RESPONSE_LENGTH = 500;
+    if (cleanedResponse.length > MAX_RESPONSE_LENGTH) {
+      cleanedResponse = cleanedResponse.slice(0, MAX_RESPONSE_LENGTH) + "...";
+    }
+
+    // Store conversation directly in pane-level state (queue size limit: 3)
+    const existingState = getPaneAgentState(paneId);
+    const existingHistory = existingState?.conversationHistory ?? [];
+    const existingTotalRounds = existingState?.totalRounds ?? 0;
+
+    const newRound = {
+      user_input: userInput,
+      agent_response: cleanedResponse,
+      timestamp: Date.now(),
+    };
+
+    // Keep only last 3 rounds (queue behavior)
+    const updatedHistory = [...existingHistory, newRound].slice(-3);
+
+    console.log("[FullscreenTerminal] Storing conversation round:", {
+      paneId,
+      userInput,
+      agentResponse: cleanedResponse.slice(0, 50),
+      updatedHistory,
+      totalRounds: existingTotalRounds + 1,
+    });
+
+    updatePaneAgentState(paneId, {
+      conversationHistory: updatedHistory,
+      totalRounds: existingTotalRounds + 1,
+    });
+
+    // Reset tracking state
+    conversationTrackingRef.current.isWaitingForUserInput = false;
+    conversationTrackingRef.current.pendingUserInput = null;
+    conversationTrackingRef.current.outputSettleTimeout = null;
+    conversationTrackingRef.current.captureStartRow = undefined;
+  }, [paneId]);
+
+  const handleConversationOutput = useCallback(() => {
+    if (!conversationTrackingRef.current.isWaitingForUserInput) return;
+
+    // Reset the settle timeout on new output
+    clearOutputSettleTimeout();
+
+    // Set a new timeout to detect when output has settled
+    conversationTrackingRef.current.outputSettleTimeout = window.setTimeout(() => {
+      settleAgentResponse();
+    }, 2000); // 2 seconds of no output = response complete
+  }, [clearOutputSettleTimeout, settleAgentResponse]);
 
   useEffect(() => {
     latestTerminalSnapshotRef.current = createTerminalDiagnosticsSnapshot("latest");
@@ -990,6 +1158,9 @@ export function FullscreenTerminal({
         return;
       }
 
+      // Track conversation input for AI agents
+      handleConversationUserInput(data);
+
       onData(data);
     });
 
@@ -1195,6 +1366,7 @@ export function FullscreenTerminal({
       pendingProbeRef.current = null;
       clearActivationFrame();
       clearKeyboardCursorProbeTimeout();
+      clearOutputSettleTimeout();
       pendingKeyboardCursorProbeRef.current = false;
 
       // Remove textarea event listeners
@@ -1225,6 +1397,7 @@ export function FullscreenTerminal({
     clearActivationFrame,
     clearKeyboardCursorProbeTimeout,
     clearClaudeRetryTimeout,
+    clearOutputSettleTimeout,
     flushPendingWrites,
     handleTerminalMouseMove,
     handleTerminalMouseDown,
@@ -1349,8 +1522,11 @@ export function FullscreenTerminal({
       const newData = snapshot.rawOutput.slice(relativeWriteStart);
       lastWrittenRef.current = absoluteEndOffset;
       enqueueTerminalWrite(newData);
+
+      // Track conversation output for AI agents
+      handleConversationOutput();
     }
-  }, [enqueueTerminalWrite, readRawOutputSnapshot, visible]);
+  }, [enqueueTerminalWrite, readRawOutputSnapshot, visible, handleConversationOutput]);
 
   useEffect(() => {
     if (subscribeToRawOutput) {

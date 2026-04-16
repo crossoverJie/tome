@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
@@ -9,6 +11,8 @@ import {
   setPaneSessionInitOptions,
   setPaneAgentState,
   removePaneAgentState,
+  removePaneOutputAndActivity,
+  getPaneAgentState,
 } from "./hooks/sessionState";
 import { getRootDiagnosticsSnapshot, logDiagnostics } from "./utils/diagnostics";
 import { getTabCurrentDirectory, getDirectoryLabel } from "./utils/workdir";
@@ -18,9 +22,21 @@ import {
   type PaneAgentState,
 } from "./utils/agentStatus";
 import type { AiAgentKind } from "./utils/fullscreenSessionState";
+import { useWindowSnapshot } from "./hooks/useWindowSnapshot";
+import { Overview } from "./pages/Overview";
 import "./App.css";
 
+// Check if this is the overview window
+const isOverviewWindow = window.location.pathname === "/overview";
+
+console.log("[App] pathname:", window.location.pathname, "isOverviewWindow:", isOverviewWindow);
+
 function App() {
+  if (isOverviewWindow) {
+    console.log("[App] Rendering Overview component");
+    return <Overview />;
+  }
+
   const {
     tabs,
     activeTabId,
@@ -46,6 +62,15 @@ function App() {
   const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
   // Track pane agent states for tab agent status display
   const [paneAgentMap, setPaneAgentMap] = useState<Map<string, PaneAgentState>>(new Map());
+
+  // Window snapshot reporting
+  useWindowSnapshot({
+    tabs,
+    activeTabId,
+    paneAgentMap,
+    paneDirectoryMap,
+  });
+
   const containerRef = useRef<HTMLDivElement>(null);
   const latestAppSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const totalPaneCount = useMemo(
@@ -104,13 +129,22 @@ function App() {
       setPaneAgentMap((prev) => {
         const next = new Map(prev);
         if (isActive && aiAgentKind !== null) {
-          const state: PaneAgentState = { aiAgentKind, isActive: true };
+          // Get existing conversation data from pane state if available
+          const existingPaneState = getPaneAgentState(paneId);
+          const state: PaneAgentState = {
+            aiAgentKind,
+            isActive: true,
+            conversationHistory: existingPaneState?.conversationHistory ?? [],
+            totalRounds: existingPaneState?.totalRounds ?? 0,
+          };
           next.set(paneId, state);
           // Also persist to session state
           setPaneAgentState(paneId, state);
         } else {
+          // When agent exits, just remove from the map but KEEP the conversation history
+          // in the registry for future reference
           next.delete(paneId);
-          removePaneAgentState(paneId);
+          // Do NOT call removePaneAgentState() - we want to preserve the history
         }
         return next;
       });
@@ -308,6 +342,7 @@ function App() {
         if (!allPaneIds.has(paneId)) {
           newMap.delete(paneId);
           removePaneAgentState(paneId);
+          removePaneOutputAndActivity(paneId);
         }
       }
       return newMap;
@@ -367,6 +402,61 @@ function App() {
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, [createAppDiagnosticsSnapshot]);
+
+  // Listen for focus-pane events from menu bar overview
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupListener = async () => {
+      unlisten = await listen<{ tab_id: string; pane_id: string }>("focus-pane", (event) => {
+        const { tab_id, pane_id } = event.payload;
+
+        // Switch to the target tab first
+        switchTab(tab_id);
+
+        // Wait for tab switch to complete before focusing pane
+        // Use requestAnimationFrame to ensure React state update has applied
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            focusPane(pane_id);
+          });
+        });
+
+        // Activate this window
+        void getCurrentWindow().setFocus();
+
+        logDiagnostics("App", "focus-pane", {
+          ...createAppDiagnosticsSnapshot("focus-pane"),
+          targetTabId: tab_id,
+          targetPaneId: pane_id,
+        });
+      });
+    };
+
+    void setupListener();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [switchTab, focusPane, createAppDiagnosticsSnapshot]);
+
+  // Unregister window when closing
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const unregister = async () => {
+        try {
+          const window = await getCurrentWindow();
+          await invoke("unregister_window", { windowLabel: window.label });
+        } catch (error) {
+          console.error("[App] Failed to unregister window:", error);
+        }
+      };
+      void unregister();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   return (
     <div className="app" ref={containerRef}>

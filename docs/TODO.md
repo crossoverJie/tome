@@ -127,6 +127,47 @@
 ### 2.7 通知
 - [ ] 长时间命令完成后发送 macOS 系统通知
 
+### 2.8 菜单栏 Agent Overview
+
+为 macOS 菜单栏增加常驻入口，提供跨窗口、跨 tab、跨 pane 的统一 agent 总览面板。
+
+**Phase 2.8.1 - Frontend: Window Snapshot Producer**
+- [x] 窗口级快照聚合逻辑（汇总 tabs/pane tree/cwd/agent state/焦点信息）
+- [x] 预览文本提取与清洗（ANSI/控制字符过滤，2-4 行摘要）
+- [x] Agent 状态判定扩展（running / waiting_input / idle / error / unknown）
+- [x] 快照上报节流机制（避免高频 IPC）
+- [x] 快照触发事件：agent 状态变化、cwd 变化、tab/pane 操作、窗口焦点变化
+
+**Phase 2.8.2 - Rust: Global Registry**
+- [x] `AgentWorkspaceRegistry` 全局状态结构体
+- [x] 窗口注册、更新、销毁接口
+- [x] 异常退出清理机制（避免幽灵窗口）
+- [x] 聚合状态统计（各状态 agent 数量）
+
+**Phase 2.8.3 - Rust: Menu Bar Status Item**
+- [x] macOS 菜单栏状态项初始化
+- [x] 图标状态更新（无 agent/有运行中/异常态）
+- [x] Popover 容器（Tauri webview window）
+
+**Phase 2.8.4 - Overview UI**
+- [x] 总览区组件（agent 总数、各状态数量、最近活跃时间）
+- [x] 窗口分组列表组件
+- [x] Agent 卡片组件（logo、状态、目录、位置、预览、时间）
+- [ ] Hover tooltip（完整目录、长预览）
+- [x] 空状态展示
+
+**Phase 2.8.5 - Focus Handoff**
+- [x] Rust → Frontend 聚焦事件接口
+- [x] App.tsx 消费聚焦事件（切换 tab / pane）
+- [x] 目标窗口激活逻辑
+- [x] 窗口不存在时的自愈清理
+
+**Phase 2.8.6 - 测试**
+- [ ] 前端快照聚合单元测试
+- [ ] 预览文本清洗单元测试
+- [ ] Rust `AgentWorkspaceRegistry` 单元测试
+- [ ] E2E 测试：多窗口场景、跳转验证、窗口关闭清理
+
 ---
 
 ## Phase 3 — 体验打磨
@@ -198,46 +239,6 @@
 ---
 
 ## 验证方法
-
-### 命令语法高亮（1.5）
-
-启动应用后，在输入框输入以下命令测试高亮效果：
-
-| 输入 | 预期效果 |
-|------|----------|
-| `ls -la` | `ls` 粉色（命令），`-la` 青色（参数） |
-| `echo "hello world"` | `"hello world"` 绿色（字符串） |
-| `cd $HOME` | `$HOME` 紫色（变量） |
-| `cat file.txt \| grep pattern` | `cat`/`grep` 粉色（命令），`file.txt` 黄色（路径），`\|` 粉色（操作符） |
-| `# 这是注释` | 整行灰色（注释） |
-| `if true; then echo "ok"; fi` | `if`/`then`/`fi` 粉色（关键字） |
-| `./script.sh` | `./script.sh` 黄色（路径） |
-
-技术实现：
-- `src/components/shellLanguage.ts` - CodeMirror 6 StreamParser 语法解析
-- `src/components/shellHighlight.ts` - 语法高亮主题定义
-- `src/components/shellValidation.ts` - 异步命令/路径存在性验证扩展
-- `src/components/InputEditor.tsx` - 集成验证扩展与编辑器生命周期
-- `src/components/PaneView.tsx` - 注入 `check_command_exists` / `check_path_exists` IPC 调用
-- `src-tauri/src/completion.rs` - `check_command_exists` / `check_path_exists` 与 PATH 缓存
-- `src-tauri/src/lib.rs` - 暴露验证 IPC 命令
-- `src/App.css` - CSS 变量定义颜色
-- 依赖：`@codemirror/language`, `@lezer/highlight`
-
-### 命令/路径存在性验证（1.5）
-
-启动应用后，在输入框输入以下命令测试验证效果（约 300ms 延迟后生效）：
-
-| 输入 | 预期效果 |
-|------|----------|
-| `pw` | `pw` 红色带波浪下划线（命令不存在） |
-| `pwd` | `pwd` 粉色（命令存在，正常颜色） |
-| `ls ./nonexistent_dir` | `./nonexistent_dir` 红色（路径不存在） |
-| `cat ./src` | `./src` 黄色（路径存在，正常颜色） |
-| `ls ~/nonexistent_dir` | `~/nonexistent_dir` 红色（路径不存在） |
-| `echo "hello"` | `echo` 粉色，字符串绿色，无红色 |
-| `if true; then` | 关键字粉色，无红色（关键字不验证） |
-| `ls Documents` | 无红色（普通参数不验证） |
 
 ### CI 检查
 
