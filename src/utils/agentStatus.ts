@@ -27,12 +27,17 @@ export const AGENT_LABELS: Record<Exclude<AiAgentKind, null>, string> = {
  */
 const AGENT_ORDER: Exclude<AiAgentKind, null>[] = ["claude", "codex", "opencode", "copilot"];
 
+import type { ConversationRound } from "./fullscreenSessionState";
+
 /**
  * Pane-level agent state
  */
 export interface PaneAgentState {
   aiAgentKind: AiAgentKind;
   isActive: boolean;
+  // Conversation tracking for Agent Overview
+  conversationHistory?: ConversationRound[];
+  totalRounds?: number;
 }
 
 /**

@@ -9,6 +9,8 @@ import {
   setSessionState,
   setSessionIdForPane,
   updateSessionState,
+  setPaneRawOutput,
+  updatePaneActivity,
 } from "./sessionState";
 import type { CompletionResponse } from "../types/completion";
 import { logDiagnostics } from "../utils/diagnostics";
@@ -563,6 +565,12 @@ export function useTerminalSession(
       rawOutputListenersRef.current.forEach((listener) => {
         listener();
       });
+
+      // Track raw output and activity for menu bar agent overview
+      if (paneId) {
+        setPaneRawOutput(paneId, rawOutputRef.current);
+        updatePaneActivity(paneId);
+      }
 
       if (next.didTrim) {
         const shouldLogTrim =

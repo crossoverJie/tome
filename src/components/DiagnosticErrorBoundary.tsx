@@ -31,6 +31,9 @@ export class DiagnosticErrorBoundary extends Component<
       componentStack: errorInfo.componentStack,
       ...getRootDiagnosticsSnapshot(),
     });
+    // Also log to console for immediate visibility
+    console.error("[Renderer Error]", error);
+    console.error("[Component Stack]", errorInfo.componentStack);
   }
 
   render() {

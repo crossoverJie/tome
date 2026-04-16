@@ -220,6 +220,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -258,6 +259,7 @@ describe("FullscreenTerminal", () => {
 
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -313,6 +315,7 @@ describe("FullscreenTerminal", () => {
 
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -359,6 +362,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={false}
         isFocused={false}
@@ -372,6 +376,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -408,6 +413,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -427,6 +433,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -454,6 +461,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -473,6 +481,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -486,6 +495,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -519,6 +529,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -566,6 +577,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -591,6 +603,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -611,6 +624,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -638,6 +652,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -658,6 +673,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -678,6 +694,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -703,6 +720,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -741,6 +759,7 @@ describe("FullscreenTerminal", () => {
 
     const { rerender } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={false}
@@ -761,6 +780,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -784,6 +804,7 @@ describe("FullscreenTerminal", () => {
 
     rerender(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={false}
@@ -810,6 +831,7 @@ describe("FullscreenTerminal", () => {
 
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -873,6 +895,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -926,6 +949,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -989,6 +1013,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1017,6 +1042,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1043,6 +1069,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1075,6 +1102,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1109,6 +1137,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1141,6 +1170,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1179,6 +1209,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1206,6 +1237,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1257,6 +1289,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1308,6 +1341,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1367,6 +1401,7 @@ describe("FullscreenTerminal", () => {
     const onData = vi.fn();
     const { container } = render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}
@@ -1432,6 +1467,7 @@ describe("FullscreenTerminal", () => {
 
     render(
       <FullscreenTerminal
+        paneId="pane-1"
         sessionId={"session-1"}
         visible={true}
         isFocused={true}

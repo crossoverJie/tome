@@ -49,7 +49,12 @@
       "WebFetch(domain:tianqi.baidu.com)",
       "WebFetch(domain:weather.com)",
       "WebFetch(domain:r.jina.ai)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(file:*)",
+      "Bash(ls -la *.config.*)",
+      "Bash(pkill -f \"tauri dev\")",
+      "Bash(pkill -f \"target/debug/tome\")",
+      "WebFetch(domain:www.weather.com.cn)"
     ]
   }
 }
