@@ -79,10 +79,12 @@ function OverviewContent() {
     }
   }, []);
 
-  const handleWindowClick = useCallback(async (_windowLabel: string) => {
+  const handleWindowClick = useCallback(async (windowLabel: string) => {
     try {
-      // TODO: Implement window activation
-      // For now, just close the overview
+      // Focus the target window
+      await invoke("focus_window", { windowLabel });
+
+      // Close overview window after clicking
       const overviewWindow = await getCurrentWindow();
       await overviewWindow.close();
     } catch (err) {
@@ -110,8 +112,8 @@ function OverviewContent() {
     );
   }
 
-  if (!overviewData || overviewData.windows.length === 0) {
-    console.log("[Overview] Rendering empty state, windows:", overviewData?.windows?.length);
+  if (!overviewData || overviewData.stats.total_agents === 0) {
+    console.log("[Overview] Rendering empty state, total agents:", overviewData?.stats?.total_agents);
     return (
       <div className="overview-empty">
         <span className="overview-empty-icon">🤖</span>

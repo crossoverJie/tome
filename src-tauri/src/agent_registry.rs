@@ -264,7 +264,8 @@ mod tests {
             agent_status: status,
             is_focused: false,
             last_activity_at: 1000,
-            preview_text: "test output".to_string(),
+            total_rounds: 0,
+            recent_conversations: vec![],
             session_id: None,
         }
     }

@@ -411,11 +411,16 @@ function App() {
       unlisten = await listen<{ tab_id: string; pane_id: string }>("focus-pane", (event) => {
         const { tab_id, pane_id } = event.payload;
 
-        // Switch to the target tab
+        // Switch to the target tab first
         switchTab(tab_id);
 
-        // Focus the target pane
-        focusPane(pane_id);
+        // Wait for tab switch to complete before focusing pane
+        // Use requestAnimationFrame to ensure React state update has applied
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            focusPane(pane_id);
+          });
+        });
 
         // Activate this window
         void getCurrentWindow().setFocus();

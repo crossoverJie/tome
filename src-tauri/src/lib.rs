@@ -152,7 +152,16 @@ fn focus_pane_in_window(
     .map_err(|e| e.to_string())
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+fn focus_window(window_label: String, app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(&window_label) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err(format!("Window '{}' not found", window_label))
+    }
+}
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -176,7 +185,8 @@ pub fn run() {
             update_window_snapshot,
             get_agent_overview,
             unregister_window,
-            focus_pane_in_window
+            focus_pane_in_window,
+            focus_window
         ])
         .setup(|app| {
             // Initialize menu bar tray icon
