@@ -102,6 +102,7 @@ impl AgentWorkspaceRegistry {
     }
 
     /// Get a specific window snapshot
+    #[allow(dead_code)]
     pub fn get_window(&self, window_label: &str) -> Option<WindowSnapshot> {
         let windows = self.windows.lock().unwrap();
         windows.get(window_label).cloned()
@@ -189,6 +190,7 @@ impl AgentWorkspaceRegistry {
     }
 
     /// Check if there are any active (running or waiting_input) agents
+    #[allow(dead_code)]
     pub fn has_active_agents(&self) -> bool {
         let windows = self.windows.lock().unwrap();
         for window in windows.values() {
@@ -226,6 +228,7 @@ impl AgentWorkspaceRegistry {
     }
 
     /// Check if there are any agents in error state
+    #[allow(dead_code)]
     pub fn has_error_agents(&self) -> bool {
         let windows = self.windows.lock().unwrap();
         for window in windows.values() {
@@ -243,6 +246,7 @@ impl AgentWorkspaceRegistry {
 
 impl AgentWorkspaceRegistry {
     /// Create a new Arc-wrapped registry (for sharing across threads)
+    #[allow(dead_code)]
     pub fn new_arc() -> Arc<Self> {
         Arc::new(Self::new())
     }

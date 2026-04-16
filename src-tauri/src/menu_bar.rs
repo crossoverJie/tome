@@ -145,6 +145,7 @@ pub fn update_tray_icon<R: Runtime>(
 }
 
 /// Get the overview window label
+#[allow(dead_code)]
 pub fn overview_window_label() -> &'static str {
     OVERVIEW_WINDOW_LABEL
 }
