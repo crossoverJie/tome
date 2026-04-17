@@ -199,16 +199,22 @@ function App() {
 
   // Effect to submit pending command after switching to terminal view
   useEffect(() => {
-    if (viewMode === "terminal" && pendingCommandRef.current && focusedPaneId) {
-      const command = pendingCommandRef.current;
-      pendingCommandRef.current = null;
+    if (viewMode === "terminal" && pendingCommandRef.current) {
+      // Wait a bit for the pane to be ready
+      const timeoutId = setTimeout(() => {
+        if (pendingCommandRef.current && focusedPaneId) {
+          const command = pendingCommandRef.current;
+          pendingCommandRef.current = null;
 
-      // Get the focused pane's session and submit the command
-      // This is handled by the SplitPaneContainer via a ref mechanism
-      const event = new CustomEvent("tome:submit-command", {
-        detail: { paneId: focusedPaneId, command },
-      });
-      window.dispatchEvent(event);
+          // Get the focused pane's session and submit the command
+          const event = new CustomEvent("tome:submit-command", {
+            detail: { paneId: focusedPaneId, command },
+          });
+          window.dispatchEvent(event);
+        }
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [viewMode, focusedPaneId]);
 
