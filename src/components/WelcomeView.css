@@ -12,6 +12,18 @@
   overflow: auto;
 }
 
+/* Draggable title bar region */
+.welcome-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  z-index: 101;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
 .welcome-bg-pattern {
   position: absolute;
   inset: 0;

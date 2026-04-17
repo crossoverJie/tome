@@ -88,6 +88,9 @@ export function WelcomeView({
 
   return (
     <div className="welcome-view">
+      {/* Draggable title bar region */}
+      <div className="welcome-drag-region" data-tauri-drag-region />
+
       {/* Background pattern */}
       <div className="welcome-bg-pattern" />
 
