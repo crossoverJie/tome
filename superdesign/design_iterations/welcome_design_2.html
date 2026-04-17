@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tome Welcome - Minimal Light Theme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Fira Code', monospace; }
+
+        :root {
+            --bg-primary: #fafafa;
+            --bg-secondary: #ffffff;
+            --bg-card: #f5f5f5;
+            --bg-card-hover: #eeeeee;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border-color: #e0e0e0;
+            --accent: #6366f1;
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+
+        body {
+            background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .logo-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .info-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .info-card:hover {
+            border-color: #d0d0d0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        /* Subtle background pattern */
+        .bg-pattern {
+            position: absolute;
+            inset: 0;
+            opacity: 0.4;
+            background-image:
+                radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.06) 0%, transparent 50%);
+        }
+
+        /* Logo subtle animation */
+        .logo-container {
+            animation: gentle-breathe 6s ease-in-out infinite;
+        }
+
+        @keyframes gentle-breathe {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.01); opacity: 0.95; }
+        }
+
+        /* Input focus */
+        .input-box {
+            border: 1px solid var(--border-color);
+            background: white;
+            transition: all 0.2s ease;
+        }
+
+        .input-box:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        /* Directory item */
+        .dir-item {
+            transition: all 0.15s ease;
+            border-radius: 6px;
+        }
+
+        .dir-item:hover {
+            background: #f0f0f5;
+            transform: translateX(3px);
+        }
+
+        /* Keyboard shortcut */
+        .kbd {
+            background: #f0f0f0;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.05);
+        }
+
+        /* Slide hint animation */
+        .slide-hint {
+            animation: subtle-pulse 3s ease-in-out infinite;
+        }
+
+        @keyframes subtle-pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Card icon colors */
+        .icon-os { color: #ec4899; }
+        .icon-shell { color: #06b6d4; }
+        .icon-cpu { color: #6366f1; }
+        .icon-mem { color: #22c55e; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 relative">
+    <!-- Background pattern -->
+    <div class="bg-pattern"></div>
+
+    <!-- Main container -->
+    <div class="w-full max-w-2xl relative z-10">
+
+        <!-- Logo Section -->
+        <div class="text-center mb-12 logo-container">
+            <div class="text-5xl mb-4 text-indigo-500">◈</div>
+            <h1 class="text-5xl font-semibold logo-gradient mb-3">Tome</h1>
+            <p class="text-lg text-gray-500">"Your command, beautifully"</p>
+            <!-- Welcome message placeholder -->
+            <p class="text-sm text-indigo-400/70 mt-2">Welcome back, geek</p>
+        </div>
+
+        <!-- System Info Card -->
+        <div class="info-card rounded-xl p-6 mb-5">
+            <div class="flex items-center gap-2 mb-5 text-indigo-500">
+                <span class="text-sm">◉</span>
+                <span class="text-xs font-semibold tracking-wider uppercase">System Info</span>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="flex items-center gap-3 p-3 rounded-lg bg-gray-50/50">
+                    <span class="icon-os text-xl">🍎</span>
+                    <div>
+                        <div class="text-xs text-gray-400">OS</div>
+                        <div class="text-sm text-gray-700">macOS 14.5</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-lg bg-gray-50/50">
+                    <span class="icon-shell text-xl">⌨</span>
+                    <div>
+                        <div class="text-xs text-gray-400">Shell</div>
+                        <div class="text-sm text-gray-700">zsh</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-lg bg-gray-50/50">
+                    <span class="icon-cpu text-xl">⚙</span>
+                    <div>
+                        <div class="text-xs text-gray-400">CPU</div>
+                        <div class="text-sm text-gray-700">Apple M4</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 rounded-lg bg-gray-50/50">
+                    <span class="icon-mem text-xl">🧠</span>
+                    <div>
+                        <div class="text-xs text-gray-400">Memory</div>
+                        <div class="text-sm text-gray-700">87% used</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Directories -->
+        <div class="info-card rounded-xl p-5 mb-5">
+            <div class="flex items-center gap-2 mb-4 text-gray-400">
+                <span class="text-sm">📁</span>
+                <span class="text-xs font-semibold tracking-wider uppercase">Recent Directories</span>
+            </div>
+            <div class="space-y-1">
+                <div class="dir-item flex items-center gap-3 p-2.5 cursor-pointer">
+                    <span class="text-indigo-400">❯</span>
+                    <span class="text-sm text-gray-600">~/Projects/tome</span>
+                    <span class="text-xs text-gray-400 ml-auto bg-gray-100 px-2 py-0.5 rounded">main</span>
+                </div>
+                <div class="dir-item flex items-center gap-3 p-2.5 cursor-pointer">
+                    <span class="text-indigo-400">❯</span>
+                    <span class="text-sm text-gray-600">~/workspace/kernel</span>
+                    <span class="text-xs text-gray-400 ml-auto bg-gray-100 px-2 py-0.5 rounded">v6.7-rc</span>
+                </div>
+                <div class="dir-item flex items-center gap-3 p-2.5 cursor-pointer">
+                    <span class="text-indigo-400">❯</span>
+                    <span class="text-sm text-gray-600">~/ml-model</span>
+                    <span class="text-xs text-gray-400 ml-auto bg-gray-100 px-2 py-0.5 rounded">feature/transformer</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Command Input -->
+        <div class="input-box rounded-xl p-1 mb-8">
+            <div class="flex items-center gap-3 px-4 py-3">
+                <span class="text-indigo-500 text-lg">❯</span>
+                <input type="text"
+                       placeholder="Type a command to begin..."
+                       class="flex-1 bg-transparent border-none outline-none text-gray-700 placeholder-gray-400 text-sm"
+                       style="font-family: 'Fira Code', monospace;">
+                <span class="text-xs text-gray-400">↵</span>
+            </div>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="flex items-center justify-center gap-6 text-xs text-gray-400">
+            <div class="flex items-center gap-2">
+                <span class="kbd">⌘</span>
+                <span>+</span>
+                <span class="kbd">K</span>
+                <span class="text-gray-400">clear</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="kbd">↑</span>
+                <span class="kbd">↓</span>
+                <span class="text-gray-400">history</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="kbd">⌘</span>
+                <span>+</span>
+                <span class="kbd">⇧</span>
+                <span>+</span>
+                <span class="kbd">H</span>
+                <span class="text-gray-400">home</span>
+            </div>
+        </div>
+
+        <!-- Slide transition hint -->
+        <div class="text-center mt-10 slide-hint">
+            <span class="text-xs text-gray-400">Type any command and press Enter to start</span>
+        </div>
+    </div>
+</body>
+</html>

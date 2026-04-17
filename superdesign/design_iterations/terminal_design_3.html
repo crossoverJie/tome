@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Dashboard - Cyberpunk Theme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Space Mono', monospace; }
+
+        :root {
+            --bg-primary: #050508;
+            --bg-secondary: #0a0a0f;
+            --bg-block: #0f0f16;
+            --bg-block-hover: #151520;
+            --bg-input: #08080c;
+            --text-primary: #e0e0ff;
+            --text-secondary: #606080;
+            --text-muted: #404060;
+            --border-color: #1a1a2e;
+            --accent: #ff006e;
+            --accent-secondary: #8338ec;
+            --success: #06ffa5;
+            --error: #ff2a6d;
+            --warning: #ffbe0b;
+        }
+
+        body {
+            background: linear-gradient(180deg, #050508 0%, #0a0a1a 100%);
+            color: var(--text-primary);
+        }
+
+        .cyber-border {
+            border: 1px solid;
+            border-image: linear-gradient(135deg, #ff006e, #8338ec, #3a86ff) 1;
+        }
+
+        .cyber-glow {
+            box-shadow: 0 0 40px rgba(131, 56, 236, 0.15),
+                        inset 0 0 40px rgba(131, 56, 236, 0.03);
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .gradient-orb {
+            background: conic-gradient(from 0deg, #ff006e, #8338ec, #3a86ff, #06ffa5, #ffbe0b, #ff006e);
+        }
+
+        .scan-line {
+            background: linear-gradient(180deg, transparent 0%, rgba(131, 56, 236, 0.03) 50%, transparent 100%);
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(500%); }
+        }
+
+        .block {
+            background: var(--bg-block);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .block::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(131, 56, 236, 0.3), transparent);
+        }
+
+        .block:hover {
+            background: var(--bg-block-hover);
+            border-color: rgba(131, 56, 236, 0.5);
+        }
+
+        .block-selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 15px rgba(255, 0, 110, 0.2);
+        }
+
+        .block-exit-success {
+            border-left: 2px solid var(--success);
+            box-shadow: -2px 0 10px rgba(6, 255, 165, 0.2);
+        }
+        .block-exit-error {
+            border-left: 2px solid var(--error);
+            box-shadow: -2px 0 10px rgba(255, 42, 109, 0.2);
+        }
+
+        .running-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: pulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 15px var(--accent);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.8); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.6; }
+        }
+
+        .input-area {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .input-area::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, #ff006e, #8338ec, #3a86ff);
+        }
+
+        /* Prompt Bar Segments - Cyberpunk Style */
+        .prompt-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0;
+            font-size: 12px;
+        }
+
+        .prompt-segment {
+            display: flex;
+            align-items: center;
+            padding: 3px 10px;
+            position: relative;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .prompt-separator {
+            position: relative;
+            width: 12px;
+            height: 22px;
+            margin-left: -1px;
+        }
+
+        .prompt-separator::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 11px 0 11px 8px;
+        }
+
+        /* User segment - pink neon */
+        .segment-user {
+            background: rgba(255, 0, 110, 0.2);
+            color: #ff006e;
+            border: 1px solid rgba(255, 0, 110, 0.4);
+            text-shadow: 0 0 5px rgba(255, 0, 110, 0.5);
+        }
+        .segment-user + .prompt-separator::after {
+            border-color: transparent transparent transparent rgba(255, 0, 110, 0.2);
+        }
+
+        /* Path segment - purple neon */
+        .segment-path {
+            background: rgba(131, 56, 236, 0.2);
+            color: #bd00ff;
+            border-top: 1px solid rgba(131, 56, 236, 0.4);
+            border-bottom: 1px solid rgba(131, 56, 236, 0.4);
+            text-shadow: 0 0 5px rgba(131, 56, 236, 0.5);
+        }
+        .segment-path + .prompt-separator::after {
+            border-color: transparent transparent transparent rgba(131, 56, 236, 0.2);
+        }
+
+        /* Git segment - orange neon */
+        .segment-git {
+            background: rgba(255, 190, 11, 0.15);
+            color: #ffbe0b;
+            border-top: 1px solid rgba(255, 190, 11, 0.4);
+            border-bottom: 1px solid rgba(255, 190, 11, 0.4);
+            text-shadow: 0 0 5px rgba(255, 190, 11, 0.5);
+        }
+        .segment-git + .prompt-separator::after {
+            border-color: transparent transparent transparent rgba(255, 190, 11, 0.15);
+        }
+
+        /* Version segment - green neon */
+        .segment-version {
+            background: rgba(6, 255, 165, 0.15);
+            color: #06ffa5;
+            border-top: 1px solid rgba(6, 255, 165, 0.4);
+            border-bottom: 1px solid rgba(6, 255, 165, 0.4);
+            text-shadow: 0 0 5px rgba(6, 255, 165, 0.5);
+        }
+        .segment-version + .prompt-separator::after {
+            border-color: transparent transparent transparent rgba(6, 255, 165, 0.15);
+        }
+
+        /* Time segment - cyan neon */
+        .segment-time {
+            background: rgba(0, 245, 255, 0.15);
+            color: #00f5ff;
+            border-top: 1px solid rgba(0, 245, 255, 0.4);
+            border-bottom: 1px solid rgba(0, 245, 255, 0.4);
+            text-shadow: 0 0 5px rgba(0, 245, 255, 0.5);
+        }
+        .segment-time + .prompt-separator::after {
+            border-color: transparent transparent transparent rgba(0, 245, 255, 0.15);
+        }
+
+        /* Shell indicator - blue neon */
+        .segment-shell {
+            background: rgba(58, 134, 255, 0.2);
+            color: #3a86ff;
+            border: 1px solid rgba(58, 134, 255, 0.4);
+            border-radius: 0 4px 4px 0;
+            text-shadow: 0 0 5px rgba(58, 134, 255, 0.5);
+        }
+
+        .syntax-command { color: #ff006e; text-shadow: 0 0 5px rgba(255, 0, 110, 0.5); }
+        .syntax-arg { color: #00f5ff; text-shadow: 0 0 5px rgba(0, 245, 255, 0.3); }
+        .syntax-path { color: #ffbe0b; text-shadow: 0 0 5px rgba(255, 190, 11, 0.3); }
+        .syntax-string { color: #06ffa5; text-shadow: 0 0 5px rgba(6, 255, 165, 0.3); }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1a1a2e; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #2a2a4e; }
+    </style>
+</head>
+<body class="min-h-screen p-4 relative overflow-hidden">
+    <!-- Background Effects -->
+    <div class="absolute inset-0 opacity-30 pointer-events-none">
+        <div class="absolute top-0 left-0 w-96 h-96 bg-purple-600 rounded-full blur-[150px]"></div>
+        <div class="absolute bottom-0 right-0 w-96 h-96 bg-pink-600 rounded-full blur-[150px]"></div>
+    </div>
+
+    <div class="max-w-6xl mx-auto relative cyber-border cyber-glow bg-black/80 backdrop-blur-xl">
+        <!-- Scan Line Effect -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="scan-line h-32 w-full"></div>
+        </div>
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-purple-500/20 bg-black/60">
+            <div class="flex items-center gap-4">
+                <div class="flex gap-1 text-lg">
+                    <span class="text-pink-500 neon-text">[</span>
+                    <span class="text-purple-400">👻</span>
+                    <span class="text-purple-400">👾</span>
+                    <span class="text-cyan-400">🛸</span>
+                    <span class="text-cyan-400">🌙</span>
+                    <span class="text-pink-500 neon-text">]</span>
+                </div>
+                <div class="flex gap-2">
+                    <span class="w-2 h-2 bg-purple-500/50 rounded-full animate-pulse"></span>
+                    <span class="w-2 h-2 bg-purple-500/30 rounded-full"></span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-pink-500 font-bold text-lg tracking-widest neon-text">TERMINAL</span>
+                <span class="text-green-400 font-bold text-lg neon-text">ONLINE</span>
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_10px_#4ade80]"></span>
+            </div>
+        </div>
+
+        <div class="flex gap-6 p-6">
+            <!-- Terminal Session -->
+            <div class="flex-1 flex flex-col min-h-[600px]">
+                <!-- User Info -->
+                <div class="flex items-center gap-2 text-purple-400 mb-4 px-1">
+                    <span class="text-cyan-400">➜</span>
+                    <span class="text-pink-400">geek</span>
+                    <span class="text-gray-500">@</span>
+                    <span class="text-purple-400">geekMac-mini</span>
+                </div>
+
+                <!-- Blocks Container -->
+                <div class="flex-1 space-y-3 overflow-auto max-h-[480px] pr-2">
+
+                    <!-- Block 1: Success with Starship Prompt -->
+                    <div class="block block-exit-success">
+                        <!-- Starship Style Prompt Bar -->
+                        <div class="px-3 py-2 bg-black/40 border-b border-gray-800">
+                            <div class="prompt-bar">
+                                <!-- OS LOGO + USERNAME: Display OS icon (🍎 macOS/🪟 Windows/🐧 Linux) and current user -->
+                                <div class="prompt-segment segment-user">
+                                    <span class="mr-1">🍎</span>
+                                    <span>geek</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT PATH: Display current working directory (> symbol for cyberpunk style) -->
+                                <div class="prompt-segment segment-path">
+                                    <span class="mr-1">></span>
+                                    <span>~/Projects/tome</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- GIT BRANCH: Display git branch name (⚡ lightning bolt for cyberpunk) -->
+                                <div class="prompt-segment segment-git">
+                                    <span class="mr-1">⚡</span>
+                                    <span>main</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- RUNTIME VERSION: Display language/runtime version (◈ diamond symbol) -->
+                                <div class="prompt-segment segment-version">
+                                    <span class="mr-1">◈</span>
+                                    <span>v20.10.0</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT TIME: Display execution timestamp (◷ clock symbol) -->
+                                <div class="prompt-segment segment-time">
+                                    <span class="mr-1">◷</span>
+                                    <span>22:28</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- SHELL PROMPT: Shell indicator (➜ arrow for cyberpunk) -->
+                                <div class="prompt-segment segment-shell">
+                                    <span>➜</span>
+                                </div>
+                                <!-- COMMAND INPUT: The actual command being executed with syntax highlighting -->
+                                <span class="ml-3 text-gray-300">
+                                    <span class="syntax-command">ls</span>
+                                    <span class="syntax-arg"> -la</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center px-4 py-2 gap-3 border-b border-gray-800">
+                            <button class="text-gray-500 hover:text-gray-300 text-xs">▼</button>
+                            <span class="text-green-400 text-xs">✓</span>
+                            <span class="text-gray-500 text-xs">0.8s</span>
+                        </div>
+                        <div class="px-4 pb-3 pt-2">
+                            <pre class="text-sm text-gray-300 leading-relaxed"><span class="text-blue-400">drwxr-xr-x</span>  <span class="text-yellow-400">geek</span>  <span class="text-yellow-400">staff</span>   512 B  Jan 15 09:30  <span class="text-blue-300">.</span>
+<span class="text-blue-400">drwxr-xr-x</span>  <span class="text-yellow-400">geek</span>  <span class="text-yellow-400">staff</span>   1.0 KB Jan 15 09:30  <span class="text-blue-300">..</span>
+<span class="text-blue-400">drwxr-xr-x</span>  <span class="text-yellow-400">geek</span>  <span class="text-yellow-400">staff</span>   256 B  Jan 14 22:15  <span class="text-green-300">src</span>
+<span class="text-blue-400">drwxr-xr-x</span>  <span class="text-yellow-400">geek</span>  <span class="text-yellow-400">staff</span>   128 B  Jan 13 18:42  <span class="text-green-300">docs</span></pre>
+                        </div>
+                    </div>
+
+                    <!-- Block 2: Running with Python Project -->
+                    <div class="block block-selected" style="background: linear-gradient(90deg, rgba(255,0,110,0.08) 0%, transparent 100%);">
+                        <!-- Starship Style Prompt Bar -->
+                        <div class="px-3 py-2 bg-black/40 border-b border-gray-800">
+                            <div class="prompt-bar">
+                                <!-- OS LOGO + USERNAME: macOS Apple logo with username -->
+                                <div class="prompt-segment segment-user">
+                                    <span class="mr-1">🍎</span>
+                                    <span>geek</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT PATH: Project directory path (> symbol) -->
+                                <div class="prompt-segment segment-path">
+                                    <span class="mr-1">></span>
+                                    <span>~/Projects/ml-model</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- GIT BRANCH: Feature branch with change indicators (+2 added, ~1 modified) -->
+                                <div class="prompt-segment segment-git">
+                                    <span class="mr-1">⚡</span>
+                                    <span>feature/transformer</span>
+                                    <span class="ml-1 text-xs">+2 ~1</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- RUNTIME VERSION: Python version (◈ symbol) -->
+                                <div class="prompt-segment segment-version">
+                                    <span class="mr-1">◈</span>
+                                    <span>v3.11.4</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT TIME: Execution timestamp (◷ symbol) -->
+                                <div class="prompt-segment segment-time">
+                                    <span class="mr-1">◷</span>
+                                    <span>22:31</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- SHELL PROMPT: Command indicator (➜ arrow) -->
+                                <div class="prompt-segment segment-shell">
+                                    <span>➜</span>
+                                </div>
+                                <!-- COMMAND INPUT: cargo build with arguments -->
+                                <span class="ml-3 text-gray-300">
+                                    <span class="syntax-command">cargo</span>
+                                    <span class="syntax-arg"> build</span>
+                                    <span class="syntax-string"> --release</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center px-4 py-2 gap-3 border-b border-gray-800">
+                            <button class="text-gray-500 hover:text-gray-300 text-xs">▼</button>
+                            <div class="running-dot"></div>
+                            <span class="text-pink-400 text-xs">Compiling...</span>
+                            <span class="text-pink-400 text-xs">12.4s</span>
+                        </div>
+                        <div class="px-4 pb-3 pt-2">
+                            <pre class="text-sm text-gray-300 leading-relaxed">   <span class="text-green-400">Compiling</span> tokio v1.35.0
+   <span class="text-green-400">Compiling</span> serde v1.0.193
+   <span class="text-yellow-400">Compiling</span> tauri v1.5.0
+   <span class="text-gray-500">Building</span> [=====================>   ] 184/210: tauri-codegen</pre>
+                        </div>
+                    </div>
+
+                    <!-- Block 3: Error with Node Project -->
+                    <div class="block block-exit-error">
+                        <!-- Starship Style Prompt Bar -->
+                        <div class="px-3 py-2 bg-black/40 border-b border-gray-800">
+                            <div class="prompt-bar">
+                                <!-- OS LOGO + USERNAME: macOS with username -->
+                                <div class="prompt-segment segment-user">
+                                    <span class="mr-1">🍎</span>
+                                    <span>geek</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT PATH: Web app project directory (> symbol) -->
+                                <div class="prompt-segment segment-path">
+                                    <span class="mr-1">></span>
+                                    <span>~/Projects/webapp</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- GIT BRANCH: Development branch (⚡ symbol) -->
+                                <div class="prompt-segment segment-git">
+                                    <span class="mr-1">⚡</span>
+                                    <span>develop</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- RUNTIME VERSION: Node.js version (◈ symbol) -->
+                                <div class="prompt-segment segment-version">
+                                    <span class="mr-1">◈</span>
+                                    <span>v18.17.0</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT TIME: Execution timestamp (◷ symbol) -->
+                                <div class="prompt-segment segment-time">
+                                    <span class="mr-1">◷</span>
+                                    <span>22:35</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- SHELL PROMPT: Command indicator (➜ arrow) -->
+                                <div class="prompt-segment segment-shell">
+                                    <span>➜</span>
+                                </div>
+                                <!-- COMMAND INPUT: npm install with package name -->
+                                <span class="ml-3 text-gray-300">
+                                    <span class="syntax-command">npm</span>
+                                    <span class="syntax-arg"> install</span>
+                                    <span class="syntax-string"> @unknown/package</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center px-4 py-2 gap-3 border-b border-gray-800">
+                            <button class="text-gray-500 hover:text-gray-300 text-xs">▼</button>
+                            <span class="text-red-400 text-xs">✗ 1</span>
+                            <span class="text-gray-500 text-xs">3.2s</span>
+                        </div>
+                        <div class="px-4 pb-3 pt-2">
+                            <pre class="text-sm text-gray-300 leading-relaxed"><span class="text-red-400">npm ERR!</span> code E404
+<span class="text-red-400">npm ERR!</span> 404 Not Found - GET https://registry.npmjs.org/@unknown%2fpackage
+<span class="text-red-400">npm ERR!</span> 404
+<span class="text-red-400">npm ERR!</span> 404  '@unknown/package@latest' is not in this registry.</pre>
+                        </div>
+                    </div>
+
+                    <!-- Block 4: Windows System Example -->
+                    <div class="block">
+                        <!-- Starship Style Prompt Bar for Windows -->
+                        <div class="px-3 py-2 bg-black/40 border-b border-gray-800">
+                            <div class="prompt-bar">
+                                <!-- OS LOGO + USERNAME: Windows logo (🪟) with admin username -->
+                                <div class="prompt-segment segment-user">
+                                    <span class="mr-1">🪟</span>
+                                    <span>admin</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT PATH: Windows-style path with drive letter (> symbol) -->
+                                <div class="prompt-segment segment-path">
+                                    <span class="mr-1">></span>
+                                    <span>C:\Projects\dotnet</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- GIT BRANCH: Main branch on Windows (⚡ symbol) -->
+                                <div class="prompt-segment segment-git">
+                                    <span class="mr-1">⚡</span>
+                                    <span>main</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- RUNTIME VERSION: .NET SDK version (◈ symbol) -->
+                                <div class="prompt-segment segment-version">
+                                    <span class="mr-1">◈</span>
+                                    <span>v8.0.100</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT TIME: Execution timestamp (◷ symbol) -->
+                                <div class="prompt-segment segment-time">
+                                    <span class="mr-1">◷</span>
+                                    <span>22:40</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- SHELL PROMPT: Command indicator (➜ arrow) -->
+                                <div class="prompt-segment segment-shell">
+                                    <span>➜</span>
+                                </div>
+                                <!-- COMMAND INPUT: Simple git log command (collapsed) -->
+                                <span class="ml-3 text-gray-500">git log --oneline -20</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center px-4 py-2 gap-3 border-b border-gray-800">
+                            <button class="text-gray-500 hover:text-gray-300 text-xs">▶</button>
+                            <span class="text-green-400 text-xs">✓</span>
+                            <span class="text-gray-500 text-xs">0.3s</span>
+                        </div>
+                    </div>
+
+                    <!-- Block 5: Linux System Example -->
+                    <div class="block block-exit-success">
+                        <!-- Starship Style Prompt Bar for Linux -->
+                        <div class="px-3 py-2 bg-black/40 border-b border-gray-800">
+                            <div class="prompt-bar">
+                                <!-- OS LOGO + USERNAME: Linux penguin (🐧) with dev username -->
+                                <div class="prompt-segment segment-user">
+                                    <span class="mr-1">🐧</span>
+                                    <span>dev</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT PATH: Linux kernel workspace path (> symbol) -->
+                                <div class="prompt-segment segment-path">
+                                    <span class="mr-1">></span>
+                                    <span>~/workspace/kernel</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- GIT BRANCH: Kernel release candidate with ahead indicator (⚡ 5 commits ahead) -->
+                                <div class="prompt-segment segment-git">
+                                    <span class="mr-1">⚡</span>
+                                    <span>v6.7-rc</span>
+                                    <span class="ml-1 text-xs">⚡ 5</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- RUNTIME VERSION: GCC compiler version (◈ symbol) -->
+                                <div class="prompt-segment segment-version">
+                                    <span class="mr-1">◈</span>
+                                    <span>gcc 13.2</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- CURRENT TIME: Execution timestamp (◷ symbol) -->
+                                <div class="prompt-segment segment-time">
+                                    <span class="mr-1">◷</span>
+                                    <span>22:42</span>
+                                </div>
+                                <div class="prompt-separator"></div>
+                                <!-- SHELL PROMPT: Command indicator (➜ arrow) -->
+                                <div class="prompt-segment segment-shell">
+                                    <span>➜</span>
+                                </div>
+                                <!-- COMMAND INPUT: htop system monitor -->
+                                <span class="ml-3 text-gray-300">
+                                    <span class="syntax-command">htop</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center px-4 py-2 gap-3 border-b border-gray-800">
+                            <button class="text-gray-500 hover:text-gray-300 text-xs">▼</button>
+                            <span class="text-green-400 text-xs">✓</span>
+                            <span class="text-gray-500 text-xs">45.2s</span>
+                        </div>
+                        <div class="px-4 pb-3 pt-2">
+                            <pre class="text-sm text-gray-300 leading-relaxed">  PID USER      PR  NI    VIRT    RES    SHR S  %CPU %MEM     TIME+ COMMAND
+<span class="text-green-400">12345</span> dev       20   0  12.5g   3.2g  18048 S  <span class="text-red-400">45.2</span>  <span class="text-yellow-400">20.1</span>  12:34.56 node
+<span class="text-green-400">12346</span> dev       20   0   8.2g   1.5g  12032 S   8.5   9.4   5:21.43 code</pre>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Input Area with Starship Prompt -->
+                <div class="input-area mt-4 overflow-hidden">
+                    <div class="px-3 py-2 bg-black/60">
+                        <!-- INPUT AREA PROMPT: Same structure as block prompts, shown in input area -->
+                        <div class="prompt-bar">
+                            <!-- OS LOGO + USERNAME -->
+                            <div class="prompt-segment segment-user">
+                                <span class="mr-1">🍎</span>
+                                <span>geek</span>
+                            </div>
+                            <div class="prompt-separator"></div>
+                            <!-- CURRENT PATH (> symbol for cyberpunk) -->
+                            <div class="prompt-segment segment-path">
+                                <span class="mr-1">></span>
+                                <span>~/Projects/tome</span>
+                            </div>
+                            <div class="prompt-separator"></div>
+                            <!-- GIT BRANCH (⚡ lightning bolt for cyberpunk) -->
+                            <div class="prompt-segment segment-git">
+                                <span class="mr-1">⚡</span>
+                                <span>main</span>
+                            </div>
+                            <div class="prompt-separator"></div>
+                            <!-- RUNTIME VERSION (◈ diamond symbol) -->
+                            <div class="prompt-segment segment-version">
+                                <span class="mr-1">◈</span>
+                                <span>v20.10.0</span>
+                            </div>
+                            <div class="prompt-separator"></div>
+                            <!-- CURRENT TIME (◷ clock symbol) -->
+                            <div class="prompt-segment segment-time">
+                                <span class="mr-1">◷</span>
+                                <span>22:45</span>
+                            </div>
+                            <div class="prompt-separator"></div>
+                            <!-- SHELL PROMPT (➜ arrow for cyberpunk) -->
+                            <div class="prompt-segment segment-shell">
+                                <span>➜</span>
+                            </div>
+                            <!-- ACTIVE COMMAND INPUT: Currently typing command with blinking cursor -->
+                            <span class="ml-3 pt-0.5">
+                                <span class="syntax-command">docker</span>
+                                <span class="syntax-arg"> run</span>
+                                <span class="syntax-arg"> -it</span>
+                                <span class="syntax-arg"> --rm</span>
+                                <span class="syntax-path"> ubuntu:22.04</span>
+                                <!-- CURSOR: Blinking block cursor indicating active input -->
+                                <span class="animate-pulse text-pink-500">▌</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Indicators -->
+        <div class="flex justify-center gap-2 pb-5 bg-black/60">
+            <span class="w-2 h-2 rounded-full bg-gray-600"></span>
+            <span class="w-2 h-2 rounded-full bg-gray-600"></span>
+            <span class="w-2 h-2 rounded-full bg-gray-600"></span>
+            <span class="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_8px_#a855f7]"></span>
+            <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>
+            <span class="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
+            <span class="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_8px_#eab308]"></span>
+            <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></span>
+        </div>
+    </div>
+</body>
+</html>

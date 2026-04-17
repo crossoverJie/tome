@@ -27,6 +27,11 @@ interface InputEditorProps {
   busy?: boolean;
   gitBranch?: string | null;
   currentDirectory?: string | null;
+  hidePrompt?: boolean;
+  initialValue?: string;
+  // Prompt bar context
+  user?: string;
+  runtimeVersion?: string | null;
 }
 
 interface CompletionState {
@@ -128,6 +133,10 @@ export function InputEditor({
   busy,
   gitBranch,
   currentDirectory,
+  hidePrompt,
+  initialValue,
+  user,
+  runtimeVersion,
 }: InputEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -616,7 +625,7 @@ export function InputEditor({
     if (!containerRef.current) return;
 
     const state = EditorState.create({
-      doc: "",
+      doc: initialValue || "",
       extensions: [
         keymap.of([
           {
@@ -760,11 +769,58 @@ export function InputEditor({
     [applyCompletion]
   );
 
+  // Get current time for display
+  const getCurrentTime = () => {
+    const now = new Date();
+    return now.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  };
+
+  // Get directory label (last part of path)
+  const getDirLabel = (cwd: string): string => {
+    if (cwd === "~" || cwd === "/Users") return "~";
+    const parts = cwd.split("/");
+    return parts[parts.length - 1] || cwd;
+  };
+
   return (
     <div className={`input-editor ${disabled ? "disabled" : ""} ${busy ? "busy" : ""}`}>
-      <span className="input-prompt">
-        ${gitBranch ? <span className="git-branch"> ({gitBranch})</span> : ""}
-      </span>
+      {!hidePrompt && (
+        <div className="input-prompt-bar">
+          {/* User segment */}
+          <span className="prompt-segment prompt-segment-user">
+            <span className="prompt-icon">🍎</span>
+            <span>{user || "user"}</span>
+          </span>
+          {/* Path segment */}
+          <span className="prompt-segment prompt-segment-path">
+            <span className="prompt-icon">📁</span>
+            <span>~/{currentDirectory ? getDirLabel(currentDirectory) : "~"}</span>
+          </span>
+          {/* Git branch segment */}
+          {gitBranch && (
+            <span className="prompt-segment prompt-segment-git">
+              <span className="prompt-icon">🌿</span>
+              <span>{gitBranch}</span>
+            </span>
+          )}
+          {/* Runtime version segment */}
+          {runtimeVersion && (
+            <span className="prompt-segment prompt-segment-version">
+              <span className="prompt-icon">⚡</span>
+              <span>{runtimeVersion}</span>
+            </span>
+          )}
+          {/* Time segment */}
+          <span className="prompt-segment prompt-segment-time">
+            <span className="prompt-icon">🕐</span>
+            <span>{getCurrentTime()}</span>
+          </span>
+        </div>
+      )}
       <div className="input-editor-container" ref={containerRef}>
         {completionState.open && (
           <div className="completion-menu" role="listbox" aria-label="Completion suggestions">

@@ -28,6 +28,17 @@ interface ResolvedPathTarget {
   parentDirectory: string;
 }
 
+// Get current username from environment
+function getCurrentUser(): string {
+  return (
+    import.meta.env.VITE_USER ||
+    import.meta.env.USER ||
+    import.meta.env.LOGNAME ||
+    import.meta.env.USERNAME ||
+    "user"
+  );
+}
+
 export function PaneView({
   paneId,
   sessionId,
@@ -140,6 +151,33 @@ export function PaneView({
     }
   }, [paneId, aiAgentKind, isFullscreenTerminalActive, onAgentStateChange]);
 
+  const handleSubmit = useCallback(
+    (command: string) => {
+      selectBlock(null);
+      logDiagnostics("PaneView", "submit", {
+        ...createPaneDiagnosticsSnapshot("submit"),
+        commandPreview: command.slice(0, 120),
+      });
+      sendInput(command);
+    },
+    [createPaneDiagnosticsSnapshot, sendInput, selectBlock]
+  );
+
+  // Listen for command submission events from App
+  useEffect(() => {
+    const handleCommandEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ paneId: string; command: string }>;
+      if (customEvent.detail.paneId === paneId) {
+        handleSubmit(customEvent.detail.command);
+      }
+    };
+
+    window.addEventListener("tome:submit-command", handleCommandEvent);
+    return () => {
+      window.removeEventListener("tome:submit-command", handleCommandEvent);
+    };
+  }, [paneId, handleSubmit]);
+
   useEffect(() => {
     logDiagnostics("PaneView", "mount", createPaneDiagnosticsSnapshot("mount"));
 
@@ -154,18 +192,6 @@ export function PaneView({
   useEffect(() => {
     logDiagnostics("PaneView", "state-change", createPaneDiagnosticsSnapshot("state-change"));
   }, [createPaneDiagnosticsSnapshot]);
-
-  const handleSubmit = useCallback(
-    (command: string) => {
-      selectBlock(null);
-      logDiagnostics("PaneView", "submit", {
-        ...createPaneDiagnosticsSnapshot("submit"),
-        commandPreview: command.slice(0, 120),
-      });
-      sendInput(command);
-    },
-    [createPaneDiagnosticsSnapshot, sendInput, selectBlock]
-  );
 
   // Toggle search overlay
   const toggleSearch = useCallback(() => {
@@ -352,6 +378,7 @@ export function PaneView({
               busy={!!runningBlock}
               gitBranch={gitBranch}
               currentDirectory={currentDirectory}
+              user={getCurrentUser()}
             />
           )}
           {paneInputMode === "running-control" && runningBlock && (

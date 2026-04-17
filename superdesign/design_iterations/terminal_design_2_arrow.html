@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Dashboard - Arrow-shaped Segments</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Fira Code', monospace; }
+
+        body {
+            background: #f0f0f0;
+        }
+
+        /* ===== 箭头形状的 Prompt Bar ===== */
+        .prompt-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            font-size: 13px;
+        }
+
+        .prompt-segment {
+            display: flex;
+            align-items: center;
+            padding: 4px 14px 4px 14px;
+            font-weight: 500;
+            color: white;
+            position: relative;
+            /* 使用 clip-path 创建箭头形状 */
+            clip-path: polygon(
+                0 0,                    /* 左上 */
+                calc(100% - 10px) 0,    /* 右上（箭头开始） */
+                100% 50%,               /* 右中（箭头尖端） */
+                calc(100% - 10px) 100%, /* 右下 */
+                0 100%,                 /* 左下 */
+                10px 50%                /* 左中（凹槽起点） */
+            );
+            margin-right: -10px; /* 箭头宽度，让下一个 segment 的凹槽正好贴合 */
+        }
+
+        /* 第一个 segment 没有左侧凹槽 */
+        .prompt-segment:first-child {
+            clip-path: polygon(
+                0 0,
+                calc(100% - 10px) 0,
+                100% 50%,
+                calc(100% - 10px) 100%,
+                0 100%
+            );
+            padding-left: 12px;
+            padding-right: 14px;
+        }
+
+        /* 最后一个 segment 没有右侧箭头 */
+        .prompt-segment:last-child {
+            clip-path: polygon(
+                0 0,
+                100% 0,
+                100% 100%,
+                0 100%,
+                10px 50%
+            );
+            padding-right: 12px;
+            margin-right: 0;
+        }
+
+        /* 既是第一个又是最后一个（只有一段） */
+        .prompt-segment:first-child:last-child {
+            clip-path: none;
+            border-radius: 4px;
+        }
+
+        /* 颜色定义 */
+        .segment-user {
+            background: linear-gradient(135deg, #ec4899, #f472b6);
+        }
+        .segment-path {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        }
+        .segment-git {
+            background: linear-gradient(135deg, #f97316, #fb923c);
+        }
+        .segment-version {
+            background: linear-gradient(135deg, #22c55e, #4ade80);
+        }
+        .segment-time {
+            background: linear-gradient(135deg, #06b6d4, #22d3ee);
+        }
+        .segment-shell {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        }
+
+        /* 空的 segment（无数据但保留箭头） */
+        .segment-empty {
+            min-width: 18px;
+            height: 28px;
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+
+        /* 可选：添加微妙的边框 */
+        .prompt-segment::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: inherit;
+            clip-path: inherit;
+            z-index: -1;
+        }
+
+        .syntax-command { color: #d73a49; }
+        .syntax-arg { color: #032f62; }
+
+        /* ===== 对比：原来的方案（单独的 prompt-separator 元素） ===== */
+        .prompt-bar-old {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0;
+            font-size: 13px;
+        }
+
+        .prompt-segment-old {
+            display: flex;
+            align-items: center;
+            padding: 3px 10px;
+            position: relative;
+            font-weight: 500;
+        }
+
+        .prompt-separator-old {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            margin-left: -1px;
+        }
+
+        /* User segment */
+        .segment-user-old {
+            background: linear-gradient(135deg, #ec4899, #f472b6);
+            color: white;
+        }
+        .segment-user-old + .prompt-separator-old {
+            border-width: 11px 0 11px 7px;
+            border-color: transparent transparent transparent #f472b6;
+        }
+
+        /* Path segment */
+        .segment-path-old {
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            color: white;
+        }
+        .segment-path-old + .prompt-separator-old {
+            border-width: 11px 0 11px 7px;
+            border-color: transparent transparent transparent #8b5cf6;
+        }
+
+        /* Git segment */
+        .segment-git-old {
+            background: linear-gradient(135deg, #f97316, #fb923c);
+            color: white;
+        }
+        .segment-git-old + .prompt-separator-old {
+            border-width: 11px 0 11px 7px;
+            border-color: transparent transparent transparent #fb923c;
+        }
+
+        /* Version segment */
+        .segment-version-old {
+            background: linear-gradient(135deg, #22c55e, #4ade80);
+            color: white;
+        }
+        .segment-version-old + .prompt-separator-old {
+            border-width: 11px 0 11px 7px;
+            border-color: transparent transparent transparent #4ade80;
+        }
+
+        /* Time segment */
+        .segment-time-old {
+            background: linear-gradient(135deg, #06b6d4, #22d3ee);
+            color: white;
+        }
+        .segment-time-old + .prompt-separator-old {
+            border-width: 11px 0 11px 7px;
+            border-color: transparent transparent transparent #22d3ee;
+        }
+
+        /* Shell indicator */
+        .segment-shell-old {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            color: white;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-8">
+    <div class="max-w-4xl mx-auto space-y-8">
+
+        <!-- 完整版本（所有 segment 都有数据） -->
+        <div>
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">完整 Prompt Bar（所有段都有数据）</h2>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="prompt-bar">
+                    <div class="prompt-segment segment-user">
+                        <span class="mr-1.5">🍎</span>
+                        <span>geek</span>
+                    </div>
+                    <div class="prompt-segment segment-path">
+                        <span class="mr-1.5">📁</span>
+                        <span>~/Projects/tome</span>
+                    </div>
+                    <div class="prompt-segment segment-git">
+                        <span class="mr-1.5">🌿</span>
+                        <span>main</span>
+                    </div>
+                    <div class="prompt-segment segment-version">
+                        <span class="mr-1.5">⚡</span>
+                        <span>v20.10.0</span>
+                    </div>
+                    <div class="prompt-segment segment-time">
+                        <span class="mr-1.5">🕐</span>
+                        <span>22:28</span>
+                    </div>
+                    <div class="prompt-segment segment-shell">
+                        <span>❯</span>
+                    </div>
+                    <span class="ml-4 text-gray-700 pt-1">
+                        <span class="syntax-command">git</span>
+                        <span class="syntax-arg"> checkout</span>
+                        <span class="syntax-arg"> catppuccin</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 缺少某些段（如无 git 分支） -->
+        <div>
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">缺少某些段（无 git 分支、无版本）- 保留空箭头</h2>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="prompt-bar">
+                    <div class="prompt-segment segment-user">
+                        <span class="mr-1.5">🪟</span>
+                        <span>user</span>
+                    </div>
+                    <div class="prompt-segment segment-path">
+                        <span class="mr-1.5">📁</span>
+                        <span>~\Software Projects</span>
+                    </div>
+                    <!-- 空的 git segment（无分支信息，但保留箭头） -->
+                    <div class="prompt-segment segment-git segment-empty"></div>
+                    <!-- 空的 version segment（无版本信息，但保留箭头） -->
+                    <div class="prompt-segment segment-version segment-empty"></div>
+                    <div class="prompt-segment segment-time">
+                        <span class="mr-1.5">🕐</span>
+                        <span>22:28</span>
+                    </div>
+                    <div class="prompt-segment segment-shell">
+                        <span>❯</span>
+                    </div>
+                    <span class="ml-4 text-gray-700 pt-1">
+                        <span class="syntax-command">mamba</span>
+                        <span class="syntax-arg"> activate</span>
+                        <span class="syntax-arg"> base</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 多种组合展示 -->
+        <div>
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">不同数据组合</h2>
+            <div class="bg-white rounded-lg shadow-lg p-6 space-y-4">
+
+                <!-- 组合 1：user + path + git + time + shell -->
+                <div class="prompt-bar">
+                    <div class="prompt-segment segment-user">
+                        <span class="mr-1.5">🪟</span>
+                        <span>user</span>
+                    </div>
+                    <div class="prompt-segment segment-path">
+                        <span class="mr-1.5">📁</span>
+                        <span>...\starship</span>
+                    </div>
+                    <div class="prompt-segment segment-git">
+                        <span class="mr-1.5">🌿</span>
+                        <span>master</span>
+                    </div>
+                    <div class="prompt-segment segment-time">
+                        <span class="mr-1.5">🕐</span>
+                        <span>22:28</span>
+                    </div>
+                    <div class="prompt-segment segment-shell">
+                        <span>❯</span>
+                    </div>
+                    <span class="ml-4 text-gray-700 pt-1">
+                        <span class="syntax-command">git</span>
+                        <span class="syntax-arg"> checkout</span>
+                        <span class="syntax-arg"> catppuccin</span>
+                    </span>
+                </div>
+
+                <!-- 组合 2：user + path + git + version + conda + time + shell -->
+                <div class="prompt-bar">
+                    <div class="prompt-segment segment-user">
+                        <span class="mr-1.5">🪟</span>
+                        <span>user</span>
+                    </div>
+                    <div class="prompt-segment segment-path">
+                        <span class="mr-1.5">📁</span>
+                        <span>...\starship</span>
+                    </div>
+                    <div class="prompt-segment segment-git">
+                        <span class="mr-1.5">🌿</span>
+                        <span>catppuccin</span>
+                    </div>
+                    <div class="prompt-segment segment-version" style="background: linear-gradient(135deg, #22c55e, #4ade80);">
+                        <span class="mr-1.5">🐍</span>
+                        <span>v1.76.0</span>
+                    </div>
+                    <div class="prompt-segment" style="background: linear-gradient(135deg, #14b8a6, #2dd4bf); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);">
+                        <span class="mr-1.5">⚪</span>
+                        <span>base</span>
+                    </div>
+                    <div class="prompt-segment segment-time">
+                        <span class="mr-1.5">🕐</span>
+                        <span>22:28</span>
+                    </div>
+                    <div class="prompt-segment segment-shell">
+                        <span>❯</span>
+                    </div>
+                    <span class="ml-4 text-gray-700 pt-1">
+                        <span class="syntax-command">sleep</span>
+                        <span class="syntax-arg"> 5</span>
+                    </span>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 对比：原来的方案（单独的 prompt-separator 元素） -->
+        <div>
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">对比：原来的方案（单独的 prompt-separator 元素）</h2>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+
+                <!-- 原来的方案：使用单独的 .prompt-separator 元素作为箭头 -->
+                <div class="prompt-bar-old">
+                    <!-- OS LOGO + USERNAME -->
+                    <div class="prompt-segment-old segment-user-old rounded-l">
+                        <span class="mr-1">🍎</span>
+                        <span>geek</span>
+                    </div>
+                    <div class="prompt-separator-old"></div>
+                    <!-- CURRENT PATH -->
+                    <div class="prompt-segment-old segment-path-old">
+                        <span class="mr-1">📁</span>
+                        <span>~/Projects/tome</span>
+                    </div>
+                    <div class="prompt-separator-old"></div>
+                    <!-- GIT BRANCH -->
+                    <div class="prompt-segment-old segment-git-old">
+                        <span class="mr-1">🌿</span>
+                        <span>main</span>
+                        <span class="ml-1 text-xs opacity-80">✓</span>
+                    </div>
+                    <div class="prompt-separator-old"></div>
+                    <!-- RUNTIME VERSION -->
+                    <div class="prompt-segment-old segment-version-old">
+                        <span class="mr-1">⚡</span>
+                        <span>v20.10.0</span>
+                    </div>
+                    <div class="prompt-separator-old"></div>
+                    <!-- CURRENT TIME -->
+                    <div class="prompt-segment-old segment-time-old">
+                        <span class="mr-1">🕐</span>
+                        <span>22:28</span>
+                    </div>
+                    <div class="prompt-separator-old"></div>
+                    <!-- SHELL PROMPT -->
+                    <div class="prompt-segment-old segment-shell-old">
+                        <span>❯</span>
+                    </div>
+                    <!-- COMMAND INPUT -->
+                    <span class="ml-3 text-gray-700">
+                        <span class="syntax-command">ls</span>
+                        <span class="syntax-arg"> -la</span>
+                    </span>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- 说明 -->
+        <div class="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
+            <p class="font-semibold mb-2">设计要点：</p>
+            <ul class="list-disc list-inside space-y-1">
+                <li>使用 <code>clip-path: polygon()</code> 让每个 segment 本身就是箭头形状</li>
+                <li>左侧有凹槽、右侧有尖端，完美贴合</li>
+                <li>某段无数据时，保留该 segment 但内容为空（<code>.segment-empty</code>），箭头会变短</li>
+                <li>空 segment 设置 <code>min-width: 20px</code> 确保箭头形状可见</li>
+            </ul>
+        </div>
+
+    </div>
+</body>
+</html>

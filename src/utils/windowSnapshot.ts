@@ -160,7 +160,7 @@ export function stripPromptCharacters(text: string): string {
  */
 export function cleanUserInput(text: string): string {
   // Take only the first line
-  const firstLine = text.split('\n')[0];
+  const firstLine = text.split("\n")[0];
   // Remove prompt characters
   let cleaned = stripPromptCharacters(firstLine);
   // Remove decorative patterns like ( .--. ), (_/ \_), etc.
@@ -178,7 +178,7 @@ export function cleanAgentResponse(text: string, userInput?: string): string {
   cleaned = cleanControlCharacters(cleaned);
 
   // Split into lines
-  const lines = cleaned.split('\n');
+  const lines = cleaned.split("\n");
   const cleanedLines: string[] = [];
 
   for (const line of lines) {
@@ -189,8 +189,8 @@ export function cleanAgentResponse(text: string, userInput?: string): string {
 
     // Skip user input echo if provided - check if line starts with or contains user input
     if (userInput) {
-      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, '').trim();
-      const cleanedLine = trimmed.replace(/[❯$#>➜\s]/g, '').trim();
+      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, "").trim();
+      const cleanedLine = trimmed.replace(/[❯$#>➜\s]/g, "").trim();
       // Skip if the entire line is just the user input
       if (cleanedLine === cleanedUserInput) continue;
       // Skip if line starts with user input followed by decorative content
@@ -223,9 +223,9 @@ export function cleanAgentResponse(text: string, userInput?: string): string {
 
     // Remove inline decorative sequences from lines that have content
     let contentLine = line
-      .replace(/[✢✻✶✳✽⎿·~}\{\(\)_\-…◐]/g, '') // Remove individual decorative chars including ✽ and ◐
-      .replace(/[─━═]{3,}/g, '') // Remove horizontal divider sequences (3 or more)
-      .replace(/\s+/g, ' ') // Collapse multiple spaces
+      .replace(/[✢✻✶✳✽⎿·~}\{\(\)_\-…◐]/g, "") // Remove individual decorative chars including ✽ and ◐
+      .replace(/[─━═]{3,}/g, "") // Remove horizontal divider sequences (3 or more)
+      .replace(/\s+/g, " ") // Collapse multiple spaces
       .trim();
 
     // Skip if after removing decorations, line is empty or just thinking markers
@@ -243,7 +243,7 @@ export function cleanAgentResponse(text: string, userInput?: string): string {
   }
 
   // Collapse whitespace and return
-  return collapseWhitespace(cleanedLines.join('\n').trim());
+  return collapseWhitespace(cleanedLines.join("\n").trim());
 }
 
 /**
@@ -345,7 +345,7 @@ export function buildPaneSnapshot(
   // Get recent conversations for display (last 3 rounds)
   const recentConversations: ConversationRoundPreview[] = conversationHistory
     .slice(-3)
-    .map(round => ({
+    .map((round) => ({
       user_input: truncateText(round.user_input, 100),
       agent_response: truncateText(round.agent_response, 200),
     }));
@@ -386,11 +386,21 @@ export function buildTabSnapshot(
       const lastActivity = getLastActivityForPane(paneId);
       // Get conversation data directly from registry (may be updated after agentState was set)
       const paneStateFromRegistry = getPaneAgentState(paneId);
-      const conversationHistory = paneStateFromRegistry?.conversationHistory ?? agentState?.conversationHistory ?? [];
+      const conversationHistory =
+        paneStateFromRegistry?.conversationHistory ?? agentState?.conversationHistory ?? [];
       const totalRounds = paneStateFromRegistry?.totalRounds ?? agentState?.totalRounds ?? 0;
 
       paneSnapshots.push(
-        buildPaneSnapshot(paneId, pane, agentState, isFocused, cwd, conversationHistory, totalRounds, lastActivity)
+        buildPaneSnapshot(
+          paneId,
+          pane,
+          agentState,
+          isFocused,
+          cwd,
+          conversationHistory,
+          totalRounds,
+          lastActivity
+        )
       );
     } else if (pane.children) {
       for (const childId of pane.children) {
@@ -424,12 +434,7 @@ export function buildWindowSnapshot(
   getLastActivityForPane: (paneId: string) => number
 ): WindowSnapshot {
   const tabSnapshots = tabs.map((tab) =>
-    buildTabSnapshot(
-      tab,
-      paneAgentMap,
-      paneDirectoryMap,
-      getLastActivityForPane
-    )
+    buildTabSnapshot(tab, paneAgentMap, paneDirectoryMap, getLastActivityForPane)
   );
 
   return {

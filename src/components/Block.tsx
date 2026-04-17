@@ -338,10 +338,9 @@ export const Block = memo(function Block({
     };
   }, [onOutputLinkActivate]);
 
+  // Compute classes and status
   const exitCodeClass = exitCode === null ? "" : exitCode === 0 ? "exit-success" : "exit-error";
   const runningClass = isRunning ? "block-running" : "";
-
-  // Get status text for running block
   const statusText = isRunning ? getStatusText(runningStatus, silenceMs, hasInlineProgress) : "";
 
   return (

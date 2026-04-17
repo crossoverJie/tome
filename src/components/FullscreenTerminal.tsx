@@ -607,14 +607,20 @@ export function FullscreenTerminal({
       if (inputData === "\r" || inputData === "\n" || inputData === "\r\n") {
         const currentLine = getCurrentLineFromTerminal();
         const terminal = terminalRef.current;
-        console.log("[FullscreenTerminal] User input detected:", { paneId, currentLine, isWaitingForUserInput: conversationTrackingRef.current.isWaitingForUserInput });
+        console.log("[FullscreenTerminal] User input detected:", {
+          paneId,
+          currentLine,
+          isWaitingForUserInput: conversationTrackingRef.current.isWaitingForUserInput,
+        });
         if (currentLine && !conversationTrackingRef.current.isWaitingForUserInput) {
           // Start tracking a new conversation round
           conversationTrackingRef.current.isWaitingForUserInput = true;
           conversationTrackingRef.current.pendingUserInput = currentLine;
           conversationTrackingRef.current.captureStartOffset = rawOutputRef.current.length;
           // Record the buffer row where response starts (next line after input)
-          conversationTrackingRef.current.captureStartRow = terminal ? terminal.buffer.active.cursorY + 1 : undefined;
+          conversationTrackingRef.current.captureStartRow = terminal
+            ? terminal.buffer.active.cursorY + 1
+            : undefined;
 
           clearOutputSettleTimeout();
         }
@@ -658,8 +664,8 @@ export function FullscreenTerminal({
       if (!lineText) continue;
 
       // Skip the user input line itself
-      const cleanedLine = lineText.replace(/[❯$#>➜\s]/g, '').trim();
-      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, '').trim();
+      const cleanedLine = lineText.replace(/[❯$#>➜\s]/g, "").trim();
+      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, "").trim();
       if (cleanedLine === cleanedUserInput) continue;
 
       // Skip lines that are just decorative or status indicators
@@ -669,7 +675,7 @@ export function FullscreenTerminal({
       responseLines.push(lineText);
     }
 
-    let cleanedResponse = responseLines.join('\n').trim();
+    let cleanedResponse = responseLines.join("\n").trim();
 
     // Additional cleaning for Claude's output
     cleanedResponse = cleanAgentResponse(cleanedResponse, userInput);
