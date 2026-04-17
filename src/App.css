@@ -469,6 +469,8 @@ body {
   flex-wrap: wrap;
   font-size: 13px;
   flex-shrink: 0;
+  gap: 0;
+  row-gap: 4px;
 }
 
 .input-prompt-bar .prompt-segment {
@@ -556,7 +558,7 @@ body {
 .input-editor-container {
   flex: 1;
   position: relative;
-  min-width: 0;
+  min-width: 150px;
 }
 
 .completion-menu {
