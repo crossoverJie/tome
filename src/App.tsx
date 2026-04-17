@@ -567,6 +567,8 @@ function App() {
         />
       ) : (
         <>
+          {/* Draggable title bar region for terminal view */}
+          <div className="app-drag-region" data-tauri-drag-region />
           <TabBar
             tabs={tabs}
             activeTabId={activeTabId}

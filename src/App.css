@@ -59,6 +59,18 @@ body {
   padding-top: 28px; /* Space for macOS traffic lights with overlay titlebar */
 }
 
+/* Draggable title bar region for terminal view */
+.app-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 1000;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
 /* Block List */
 .block-list {
   flex: 1;
