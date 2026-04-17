@@ -449,6 +449,7 @@ body {
 .input-editor {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   position: relative;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
