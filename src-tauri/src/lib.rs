@@ -151,8 +151,9 @@ fn get_memory_usage() -> Option<u8> {
     // Use vm_statistics64 to get memory info
     unsafe {
         let mut stats: libc::vm_statistics64 = mem::zeroed();
-        let mut count = libc::HOST_VM_INFO64_COUNT as u32;
+        let mut count = libc::HOST_VM_INFO64_COUNT;
 
+        #[allow(deprecated)]
         let result = libc::host_statistics64(
             libc::mach_host_self(),
             libc::HOST_VM_INFO64,
@@ -200,7 +201,7 @@ fn get_system_info() -> Result<SystemInfo, String> {
     // Shell info - get from SHELL env var or default to "unknown"
     let shell = std::env::var("SHELL")
         .ok()
-        .and_then(|s| s.split('/').last().map(|s| s.to_string()))
+        .and_then(|s| s.split('/').next_back().map(|s| s.to_string()))
         .unwrap_or_else(|| "unknown".to_string());
 
     // CPU info - try to get from system_profiler on macOS
