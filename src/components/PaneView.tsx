@@ -20,6 +20,7 @@ interface PaneViewProps {
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
   onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
+  isMultiPane?: boolean;
 }
 
 interface ResolvedPathTarget {
@@ -47,6 +48,7 @@ export function PaneView({
   onWorkingDirectoryChange,
   onAgentStateChange,
   onOpenPathInNewTab,
+  isMultiPane = false,
 }: PaneViewProps) {
   const {
     sessionId: activeSessionId,
@@ -337,7 +339,7 @@ export function PaneView({
 
   return (
     <div
-      className={`pane-view ${isFocused ? "focused" : ""}`}
+      className={`pane-view ${isFocused ? "focused" : ""} ${isMultiPane ? "multi-pane" : ""}`}
       onClick={handleClick}
       onMouseDownCapture={handleMouseDownCapture}
       ref={paneRef}
