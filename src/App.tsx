@@ -6,6 +6,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
+import {
+  WelcomeView,
+  type RecentDirectoryItem,
+  loadRecentDirectories,
+  saveRecentDirectories,
+  addRecentDirectory,
+} from "./components/WelcomeView";
 import { useTabs } from "./hooks/useTabs";
 import {
   setPaneSessionInitOptions,
@@ -24,6 +31,7 @@ import {
 import type { AiAgentKind } from "./utils/fullscreenSessionState";
 import { useWindowSnapshot } from "./hooks/useWindowSnapshot";
 import { Overview } from "./pages/Overview";
+import type { CompletionResponse } from "./types/completion";
 import "./App.css";
 
 // Check if this is the overview window
@@ -31,11 +39,25 @@ const isOverviewWindow = window.location.pathname === "/overview";
 
 console.log("[App] pathname:", window.location.pathname, "isOverviewWindow:", isOverviewWindow);
 
+// Type for view mode
+type ViewMode = "welcome" | "terminal";
+
 function App() {
   if (isOverviewWindow) {
     console.log("[App] Rendering Overview component");
     return <Overview />;
   }
+
+  // View mode state - default to welcome page
+  const [viewMode, setViewMode] = useState<ViewMode>("welcome");
+
+  // Recent directories state
+  const [recentDirectories, setRecentDirectories] = useState<RecentDirectoryItem[]>(() =>
+    loadRecentDirectories()
+  );
+
+  // Ref to track command submission from welcome page
+  const pendingCommandRef = useRef<string | null>(null);
 
   const {
     tabs,
@@ -103,26 +125,7 @@ function App() {
     return blockSelectionMap.get(focusedPaneId) || null;
   }, [focusedPaneId, blockSelectionMap]);
 
-  const handleWorkingDirectoryChange = useCallback(
-    (paneId: string, currentDirectory: string | null) => {
-      setPaneDirectoryMap((prev) => {
-        const nextValue = currentDirectory ?? null;
-        if ((prev.get(paneId) ?? null) === nextValue) {
-          return prev;
-        }
-
-        const next = new Map(prev);
-        if (nextValue) {
-          next.set(paneId, nextValue);
-        } else {
-          next.delete(paneId);
-        }
-        return next;
-      });
-    },
-    []
-  );
-
+  // Track working directory changes for recent directories is now defined above
   // Handle agent state changes from panes
   const handleAgentStateChange = useCallback(
     (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => {
@@ -175,6 +178,74 @@ function App() {
     return activeTabCurrentDirectory ? `${activeTabCurrentDirectory} — Tome` : "Tome";
   }, [activeTabCurrentDirectory]);
 
+  // Handle command submission from welcome page
+  const handleWelcomeSubmit = useCallback(
+    (command: string) => {
+      if (!command.trim()) {
+        return;
+      }
+
+      // Store the command and switch to terminal view
+      pendingCommandRef.current = command;
+      setViewMode("terminal");
+
+      logDiagnostics("App", "welcome-submit", {
+        command: command.slice(0, 100),
+        targetPaneId: focusedPaneId,
+      });
+    },
+    [focusedPaneId]
+  );
+
+  // Effect to submit pending command after switching to terminal view
+  useEffect(() => {
+    if (viewMode === "terminal" && pendingCommandRef.current) {
+      // Wait a bit for the pane to be ready
+      const timeoutId = setTimeout(() => {
+        if (pendingCommandRef.current && focusedPaneId) {
+          const command = pendingCommandRef.current;
+          pendingCommandRef.current = null;
+
+          // Get the focused pane's session and submit the command
+          const event = new CustomEvent("tome:submit-command", {
+            detail: { paneId: focusedPaneId, command },
+          });
+          window.dispatchEvent(event);
+        }
+      }, 100);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [viewMode, focusedPaneId]);
+
+  // Track working directory changes for recent directories
+  const handleWorkingDirectoryChange = useCallback(
+    (paneId: string, currentDirectory: string | null) => {
+      setPaneDirectoryMap((prev) => {
+        const nextValue = currentDirectory ?? null;
+        if ((prev.get(paneId) ?? null) === nextValue) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        if (nextValue) {
+          next.set(paneId, nextValue);
+
+          // Update recent directories
+          setRecentDirectories((current) => {
+            const updated = addRecentDirectory(current, nextValue, null);
+            saveRecentDirectories(updated);
+            return updated;
+          });
+        } else {
+          next.delete(paneId);
+        }
+        return next;
+      });
+    },
+    [activeTab]
+  );
+
   const handleSplitPane = useCallback(
     (direction: "horizontal" | "vertical") => {
       if (!focusedPaneId) {
@@ -209,6 +280,13 @@ function App() {
       if (e.metaKey && e.key === ",") {
         e.preventDefault();
         setShowSettings((prev) => !prev);
+        return;
+      }
+
+      // Return to home (welcome page): Cmd+Shift+H
+      if (e.metaKey && e.shiftKey && (e.key === "H" || e.key === "h")) {
+        e.preventDefault();
+        setViewMode("welcome");
         return;
       }
 
@@ -461,28 +539,66 @@ function App() {
   return (
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSwitchTab={switchTab}
-        onCreateTab={createTab}
-        onCloseTab={closeTab}
-        tabPresentations={tabPresentations}
-      />
-      {tabs.map((tab) => (
-        <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
-          <SplitPaneContainer
-            paneId={tab.rootPaneId}
-            panes={tab.panes}
-            focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
-            onFocusPane={focusPane}
-            onUpdateSplitRatio={updateSplitRatio}
-            onWorkingDirectoryChange={handleWorkingDirectoryChange}
-            onAgentStateChange={handleAgentStateChange}
-            onOpenPathInNewTab={createTabWithCwd}
+
+      {viewMode === "welcome" ? (
+        <WelcomeView
+          onSubmitCommand={handleWelcomeSubmit}
+          recentDirectories={recentDirectories}
+          onRequestCompletion={async (text, cursor) => {
+            // Use first pane for completion in welcome mode
+            if (!activeTab) {
+              return { replaceFrom: 0, replaceTo: 0, commonPrefix: null, items: [] };
+            }
+            const firstPane = Array.from(activeTab.panes.values())[0];
+            if (!firstPane) {
+              return { replaceFrom: 0, replaceTo: 0, commonPrefix: null, items: [] };
+            }
+            const sessionId = firstPane.sessionId;
+            if (!sessionId) {
+              return { replaceFrom: 0, replaceTo: 0, commonPrefix: null, items: [] };
+            }
+            const response = await invoke<CompletionResponse>("request_completion", {
+              sessionId,
+              text,
+              cursor,
+            });
+            return response;
+          }}
+          onCheckCommandExists={async (cmd) => {
+            return await invoke<boolean>("check_command_exists", { command: cmd });
+          }}
+          onCheckPathExists={async (path, cwd) => {
+            return await invoke<boolean>("check_path_exists", { path, cwd });
+          }}
+        />
+      ) : (
+        <>
+          {/* Draggable title bar region for terminal view */}
+          <div className="app-drag-region" data-tauri-drag-region />
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSwitchTab={switchTab}
+            onCreateTab={createTab}
+            onCloseTab={closeTab}
+            tabPresentations={tabPresentations}
           />
-        </div>
-      ))}
+          {tabs.map((tab) => (
+            <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
+              <SplitPaneContainer
+                paneId={tab.rootPaneId}
+                panes={tab.panes}
+                focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
+                onFocusPane={focusPane}
+                onUpdateSplitRatio={updateSplitRatio}
+                onWorkingDirectoryChange={handleWorkingDirectoryChange}
+                onAgentStateChange={handleAgentStateChange}
+                onOpenPathInNewTab={createTabWithCwd}
+              />
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

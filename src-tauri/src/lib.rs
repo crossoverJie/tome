@@ -135,6 +135,103 @@ struct FocusPaneEvent {
     pane_id: String,
 }
 
+#[derive(serde::Serialize, Clone)]
+struct SystemInfo {
+    os: String,
+    shell: String,
+    cpu: Option<String>,
+    memory: Option<String>,
+    user: String,
+}
+
+/// Get memory usage percentage on macOS
+#[cfg(target_os = "macos")]
+fn get_memory_usage() -> Option<u8> {
+    use std::mem;
+
+    // Use vm_statistics64 to get memory info
+    unsafe {
+        let mut stats: libc::vm_statistics64 = mem::zeroed();
+        let mut count = libc::HOST_VM_INFO64_COUNT;
+
+        #[allow(deprecated)]
+        let result = libc::host_statistics64(
+            libc::mach_host_self(),
+            libc::HOST_VM_INFO64,
+            &mut stats as *mut _ as *mut libc::integer_t,
+            &mut count,
+        );
+
+        if result != libc::KERN_SUCCESS {
+            return None;
+        }
+
+        let page_size = libc::sysconf(libc::_SC_PAGESIZE) as u64;
+
+        let total_memory = (stats.wire_count as u64
+            + stats.active_count as u64
+            + stats.inactive_count as u64
+            + stats.free_count as u64
+            + stats.compressor_page_count as u64)
+            * page_size;
+
+        let used_memory = (stats.wire_count as u64
+            + stats.active_count as u64
+            + stats.compressor_page_count as u64)
+            * page_size;
+
+        if total_memory == 0 {
+            return None;
+        }
+
+        let usage_percent = ((used_memory as f64 / total_memory as f64) * 100.0) as u8;
+        Some(usage_percent)
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn get_memory_usage() -> Option<u8> {
+    None
+}
+
+#[tauri::command]
+fn get_system_info() -> Result<SystemInfo, String> {
+    // OS info
+    let os = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+
+    // Shell info - get from SHELL env var or default to "unknown"
+    let shell = std::env::var("SHELL")
+        .ok()
+        .and_then(|s| s.split('/').next_back().map(|s| s.to_string()))
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // User info - get from USER env var or default to "user"
+    let user = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
+
+    // CPU info - try to get from system_profiler on macOS
+    let cpu = if cfg!(target_os = "macos") {
+        std::process::Command::new("sysctl")
+            .args(["-n", "machdep.cpu.brand_string"])
+            .output()
+            .ok()
+            .and_then(|output| String::from_utf8(output.stdout).ok())
+            .map(|s| s.trim().to_string())
+    } else {
+        None
+    };
+
+    // Memory info - get actual usage percentage
+    let memory = get_memory_usage().map(|p| format!("{}% used", p));
+
+    Ok(SystemInfo {
+        os,
+        shell,
+        cpu,
+        memory,
+        user,
+    })
+}
+
 #[tauri::command]
 fn focus_pane_in_window(
     window_label: String,
@@ -186,7 +283,8 @@ pub fn run() {
             get_agent_overview,
             unregister_window,
             focus_pane_in_window,
-            focus_window
+            focus_window,
+            get_system_info
         ])
         .setup(|app| {
             // Initialize menu bar tray icon

@@ -607,14 +607,20 @@ export function FullscreenTerminal({
       if (inputData === "\r" || inputData === "\n" || inputData === "\r\n") {
         const currentLine = getCurrentLineFromTerminal();
         const terminal = terminalRef.current;
-        console.log("[FullscreenTerminal] User input detected:", { paneId, currentLine, isWaitingForUserInput: conversationTrackingRef.current.isWaitingForUserInput });
+        console.log("[FullscreenTerminal] User input detected:", {
+          paneId,
+          currentLine,
+          isWaitingForUserInput: conversationTrackingRef.current.isWaitingForUserInput,
+        });
         if (currentLine && !conversationTrackingRef.current.isWaitingForUserInput) {
           // Start tracking a new conversation round
           conversationTrackingRef.current.isWaitingForUserInput = true;
           conversationTrackingRef.current.pendingUserInput = currentLine;
           conversationTrackingRef.current.captureStartOffset = rawOutputRef.current.length;
           // Record the buffer row where response starts (next line after input)
-          conversationTrackingRef.current.captureStartRow = terminal ? terminal.buffer.active.cursorY + 1 : undefined;
+          conversationTrackingRef.current.captureStartRow = terminal
+            ? terminal.buffer.active.cursorY + 1
+            : undefined;
 
           clearOutputSettleTimeout();
         }
@@ -658,8 +664,8 @@ export function FullscreenTerminal({
       if (!lineText) continue;
 
       // Skip the user input line itself
-      const cleanedLine = lineText.replace(/[❯$#>➜\s]/g, '').trim();
-      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, '').trim();
+      const cleanedLine = lineText.replace(/[❯$#>➜\s]/g, "").trim();
+      const cleanedUserInput = userInput.replace(/[❯$#>➜\s]/g, "").trim();
       if (cleanedLine === cleanedUserInput) continue;
 
       // Skip lines that are just decorative or status indicators
@@ -669,7 +675,7 @@ export function FullscreenTerminal({
       responseLines.push(lineText);
     }
 
-    let cleanedResponse = responseLines.join('\n').trim();
+    let cleanedResponse = responseLines.join("\n").trim();
 
     // Additional cleaning for Claude's output
     cleanedResponse = cleanAgentResponse(cleanedResponse, userInput);
@@ -1109,9 +1115,26 @@ export function FullscreenTerminal({
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace",
       fontSize: 14,
       theme: {
-        background: "#1a1a2e",
-        foreground: "#d4d4d4",
-        cursor: "#d4d4d4",
+        background: "#fafafa",
+        foreground: "#1a1a1a",
+        cursor: "#6366f1",
+        selectionBackground: "rgba(99, 102, 241, 0.2)",
+        black: "#1a1a1a",
+        red: "#ef4444",
+        green: "#22c55e",
+        yellow: "#f59e0b",
+        blue: "#3b82f6",
+        magenta: "#ec4899",
+        cyan: "#06b6d4",
+        white: "#f5f5f5",
+        brightBlack: "#666666",
+        brightRed: "#f87171",
+        brightGreen: "#4ade80",
+        brightYellow: "#fbbf24",
+        brightBlue: "#60a5fa",
+        brightMagenta: "#f472b6",
+        brightCyan: "#22d3ee",
+        brightWhite: "#ffffff",
       },
       scrollback: FULLSCREEN_SCROLLBACK_LINES,
       altClickMovesCursor: false,

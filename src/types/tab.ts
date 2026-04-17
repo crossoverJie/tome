@@ -8,6 +8,7 @@ export interface Tab {
   panes: Map<string, PaneNode>;
   focusedPaneId: string | null;
   busyCommand?: string | null;
+  gitBranch?: string | null;
 }
 
 export function createTab(tabId: string, paneId: string): Tab {

@@ -14,7 +14,10 @@
       {
         "title": "Tome",
         "width": 1000,
-        "height": 700
+        "height": 700,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true
       }
     ],
     "security": {

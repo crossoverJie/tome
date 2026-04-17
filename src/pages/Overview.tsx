@@ -27,7 +27,9 @@ export function Overview() {
       <div className="overview-error">
         <span className="overview-error-icon">💥</span>
         <span>Render error: {String(error)}</span>
-        <pre style={{fontSize: '10px', marginTop: '10px'}}>{error instanceof Error ? error.stack : ''}</pre>
+        <pre style={{ fontSize: "10px", marginTop: "10px" }}>
+          {error instanceof Error ? error.stack : ""}
+        </pre>
       </div>
     );
   }
@@ -63,21 +65,24 @@ function OverviewContent() {
     return () => clearInterval(interval);
   }, [fetchOverview]);
 
-  const handleAgentClick = useCallback(async (windowLabel: string, tabId: string, paneId: string) => {
-    try {
-      await invoke("focus_pane_in_window", {
-        windowLabel,
-        tabId,
-        paneId,
-      });
+  const handleAgentClick = useCallback(
+    async (windowLabel: string, tabId: string, paneId: string) => {
+      try {
+        await invoke("focus_pane_in_window", {
+          windowLabel,
+          tabId,
+          paneId,
+        });
 
-      // Close overview window after clicking
-      const overviewWindow = await getCurrentWindow();
-      await overviewWindow.close();
-    } catch (err) {
-      console.error("[Overview] Failed to focus pane:", err);
-    }
-  }, []);
+        // Close overview window after clicking
+        const overviewWindow = await getCurrentWindow();
+        await overviewWindow.close();
+      } catch (err) {
+        console.error("[Overview] Failed to focus pane:", err);
+      }
+    },
+    []
+  );
 
   const handleWindowClick = useCallback(async (windowLabel: string) => {
     try {
@@ -113,7 +118,10 @@ function OverviewContent() {
   }
 
   if (!overviewData || overviewData.stats.total_agents === 0) {
-    console.log("[Overview] Rendering empty state, total agents:", overviewData?.stats?.total_agents);
+    console.log(
+      "[Overview] Rendering empty state, total agents:",
+      overviewData?.stats?.total_agents
+    );
     return (
       <div className="overview-empty">
         <span className="overview-empty-icon">🤖</span>
@@ -134,9 +142,7 @@ function OverviewContent() {
       <div className="overview-header">
         <div className="overview-title-row">
           <h1 className="overview-title">Agent Overview</h1>
-          {activeAgents > 0 && (
-            <span className="overview-badge">{activeAgents}</span>
-          )}
+          {activeAgents > 0 && <span className="overview-badge">{activeAgents}</span>}
         </div>
         <div className="overview-stats">
           <StatBadge count={stats.running_count} label="running" color="green" />
@@ -200,17 +206,13 @@ function WindowGroup({ window, onAgentClick, onWindowClick }: WindowGroupProps) 
 
   const activeCount = window.tabs.reduce(
     (count, tab) =>
-      count +
-      tab.panes.filter((p) => p.agent_kind !== null && p.agent_status === "running").length,
+      count + tab.panes.filter((p) => p.agent_kind !== null && p.agent_status === "running").length,
     0
   );
 
   return (
     <div className={`window-group ${window.is_focused ? "window-group-focused" : ""}`}>
-      <button
-        className="window-group-header"
-        onClick={() => onWindowClick(window.window_label)}
-      >
+      <button className="window-group-header" onClick={() => onWindowClick(window.window_label)}>
         <div className="window-group-meta">
           {agentCount > 0 ? (
             <span>
@@ -317,9 +319,7 @@ function AgentCard({ pane, onClick }: AgentCardProps) {
 
       {/* Display conversation rounds count */}
       {pane.total_rounds > 0 && (
-        <div className="conversation-rounds-badge">
-          {pane.total_rounds} 轮对话
-        </div>
+        <div className="conversation-rounds-badge">{pane.total_rounds} 轮对话</div>
       )}
 
       {/* Display recent conversations */}

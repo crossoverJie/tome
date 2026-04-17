@@ -75,20 +75,22 @@ describe("InputEditor", () => {
     it("renders the editor with prompt", async () => {
       const { container } = await renderEditor();
       expect(container.querySelector(".cm-editor")).toBeTruthy();
-      expect(container.querySelector(".input-prompt")).toBeTruthy();
+      expect(container.querySelector(".input-prompt-bar")).toBeTruthy();
     });
 
     it("displays git branch in prompt when provided", async () => {
       const { container } = await renderEditor({ gitBranch: "main" });
-      const gitBranchEl = container.querySelector(".git-branch");
-      expect(gitBranchEl).toBeTruthy();
-      expect(gitBranchEl?.textContent).toContain("main");
+      const promptBar = container.querySelector(".input-prompt-bar");
+      expect(promptBar).toBeTruthy();
+      expect(promptBar?.textContent).toContain("main");
     });
 
     it("does not display git branch when null", async () => {
       const { container } = await renderEditor({ gitBranch: null });
-      const gitBranchEl = container.querySelector(".git-branch");
-      expect(gitBranchEl).toBeFalsy();
+      const promptBar = container.querySelector(".input-prompt-bar");
+      expect(promptBar).toBeTruthy();
+      // Git branch segment should not be rendered when null
+      expect(promptBar?.textContent).not.toContain("🌿");
     });
 
     it("disables editor when disabled prop is true", async () => {

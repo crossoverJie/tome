@@ -55,6 +55,8 @@ export function SplitPaneContainer({
     [onUpdateSplitRatio, panes]
   );
 
+  const isMultiPane = layout.leaves.length > 1;
+
   return (
     <div ref={paneRef} className="split-layout" style={style}>
       {layout.leaves.map((leaf) => {
@@ -82,6 +84,7 @@ export function SplitPaneContainer({
               onWorkingDirectoryChange={onWorkingDirectoryChange}
               onAgentStateChange={onAgentStateChange}
               onOpenPathInNewTab={onOpenPathInNewTab}
+              isMultiPane={isMultiPane}
             />
           </div>
         );
