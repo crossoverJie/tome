@@ -9,6 +9,7 @@ interface SystemInfo {
   shell: string;
   cpu?: string;
   memory?: string;
+  user: string;
 }
 
 export interface RecentDirectoryItem {

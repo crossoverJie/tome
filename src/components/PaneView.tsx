@@ -29,15 +29,14 @@ interface ResolvedPathTarget {
   parentDirectory: string;
 }
 
-// Get current username from environment
-function getCurrentUser(): string {
-  return (
-    import.meta.env.VITE_USER ||
-    import.meta.env.USER ||
-    import.meta.env.LOGNAME ||
-    import.meta.env.USERNAME ||
-    "user"
-  );
+// Get current username from system
+async function getCurrentUser(): Promise<string> {
+  try {
+    const info = await invoke<{ user: string }>("get_system_info");
+    return info.user;
+  } catch {
+    return "user";
+  }
 }
 
 export function PaneView({
@@ -90,6 +89,7 @@ export function PaneView({
 
   // Search overlay visibility state (local to each pane)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [username, setUsername] = useState<string>("user");
   const paneRef = useRef<HTMLDivElement>(null);
   const latestPaneSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const fullscreenSessionLabel =
@@ -134,6 +134,11 @@ export function PaneView({
   useEffect(() => {
     latestPaneSnapshotRef.current = createPaneDiagnosticsSnapshot("latest");
   }, [createPaneDiagnosticsSnapshot]);
+
+  // Load username on mount
+  useEffect(() => {
+    void getCurrentUser().then(setUsername);
+  }, []);
 
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
@@ -380,7 +385,7 @@ export function PaneView({
               busy={!!runningBlock}
               gitBranch={gitBranch}
               currentDirectory={currentDirectory}
-              user={getCurrentUser()}
+              user={username}
             />
           )}
           {paneInputMode === "running-control" && runningBlock && (

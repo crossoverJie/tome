@@ -141,6 +141,7 @@ struct SystemInfo {
     shell: String,
     cpu: Option<String>,
     memory: Option<String>,
+    user: String,
 }
 
 /// Get memory usage percentage on macOS
@@ -204,6 +205,9 @@ fn get_system_info() -> Result<SystemInfo, String> {
         .and_then(|s| s.split('/').next_back().map(|s| s.to_string()))
         .unwrap_or_else(|| "unknown".to_string());
 
+    // User info - get from USER env var or default to "user"
+    let user = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
+
     // CPU info - try to get from system_profiler on macOS
     let cpu = if cfg!(target_os = "macos") {
         std::process::Command::new("sysctl")
@@ -224,6 +228,7 @@ fn get_system_info() -> Result<SystemInfo, String> {
         shell,
         cpu,
         memory,
+        user,
     })
 }
 
