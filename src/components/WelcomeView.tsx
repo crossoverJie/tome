@@ -22,6 +22,8 @@ export interface RecentDirectoryItem {
 interface WelcomeViewProps {
   onSubmitCommand: (command: string) => void;
   recentDirectories: RecentDirectoryItem[];
+  currentWorkingDirectory?: string | null;
+  onDirectorySelect?: (path: string | null) => void;
   onRequestCompletion: (text: string, cursor: number) => Promise<CompletionResponse>;
   onCheckCommandExists?: (cmd: string) => Promise<boolean>;
   onCheckPathExists?: (path: string, cwd: string) => Promise<boolean>;
@@ -63,6 +65,8 @@ function formatShell(shell: string): string {
 export function WelcomeView({
   onSubmitCommand,
   recentDirectories,
+  currentWorkingDirectory,
+  onDirectorySelect,
   onRequestCompletion,
   onCheckCommandExists,
   onCheckPathExists,
@@ -81,12 +85,13 @@ export function WelcomeView({
 
   const handleDirectoryClick = useCallback((path: string) => {
     setSelectedDirectory(path);
+    onDirectorySelect?.(path);
     // Set cd command as initial input with proper shell escaping
     const cdCommand = `cd ${shellEscapePath(path)}`;
     setInitialInput(cdCommand);
     // Force InputEditor to re-render even if selecting the same directory
     setInputKey((k) => k + 1);
-  }, []);
+  }, [onDirectorySelect]);
 
   const handleSubmit = useCallback(
     (command: string) => {
@@ -196,7 +201,7 @@ export function WelcomeView({
                 disabled={false}
                 busy={false}
                 gitBranch={null}
-                currentDirectory={selectedDirectory}
+                currentDirectory={currentWorkingDirectory}
                 hidePrompt
                 initialValue={initialInput}
               />

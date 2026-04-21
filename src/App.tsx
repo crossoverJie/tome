@@ -55,6 +55,8 @@ function App() {
   const [recentDirectories, setRecentDirectories] = useState<RecentDirectoryItem[]>(() =>
     loadRecentDirectories()
   );
+  // Track selected directory in welcome view for completion context
+  const [welcomeSelectedDirectory, setWelcomeSelectedDirectory] = useState<string | null>(null);
 
   // Ref to track command submission from welcome page
   const pendingCommandRef = useRef<string | null>(null);
@@ -244,44 +246,52 @@ function App() {
         const next = new Map(prev);
         if (nextValue) {
           next.set(paneId, nextValue);
+
+          // Only add to recent directories when directory actually changes
+          // Get current git branch for this pane (may be null initially)
+          const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch ?? null;
+          setRecentDirectories((current) => {
+            const updated = addRecentDirectory(current, nextValue, gitBranch);
+            saveRecentDirectories(updated);
+            return updated;
+          });
         } else {
           next.delete(paneId);
         }
         return next;
       });
     },
-    []
+    [paneSessionStatusMap]
   );
 
-  // Update recent directories when pane directory or git branch changes
+  // Update git branch in recent directories when branch changes (without reordering)
   useEffect(() => {
-    // Collect all pane directories with their git branches
-    const paneData = new Map<string, { path: string; gitBranch: string | null }>();
+    setRecentDirectories((current) => {
+      let updated = current;
+      let hasChanges = false;
 
-    for (const [paneId, path] of paneDirectoryMap.entries()) {
-      // Skip null/undefined paths
-      if (!path) continue;
+      for (const [paneId, path] of paneDirectoryMap.entries()) {
+        if (!path) continue;
 
-      const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch ?? null;
-      // Only update if we haven't seen this path yet, or if this pane has a git branch
-      const existing = paneData.get(path);
-      if (!existing || (gitBranch && !existing.gitBranch)) {
-        paneData.set(path, { path, gitBranch });
-      }
-    }
+        const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch;
+        if (gitBranch === undefined) continue;
 
-    // Update recent directories for each unique path
-    if (paneData.size > 0) {
-      setRecentDirectories((current) => {
-        let updated = current;
-        for (const { path, gitBranch } of paneData.values()) {
-          updated = addRecentDirectory(updated, path, gitBranch);
+        // Find existing entry and update branch without reordering
+        const existingIndex = updated.findIndex((d) => d.path === path);
+        if (existingIndex !== -1 && updated[existingIndex].gitBranch !== gitBranch) {
+          updated = updated.map((d, i) =>
+            i === existingIndex ? { ...d, gitBranch } : d
+          );
+          hasChanges = true;
         }
+      }
+
+      if (hasChanges) {
         saveRecentDirectories(updated);
-        return updated;
-      });
-    }
-  }, [paneDirectoryMap, paneSessionStatusMap]);
+      }
+      return updated;
+    });
+  }, [paneSessionStatusMap, paneDirectoryMap]);
 
   const handleSplitPane = useCallback(
     (direction: "horizontal" | "vertical") => {
@@ -336,6 +346,7 @@ function App() {
           width: 1000,
           height: 700,
           url: "/",
+          decorations: false,
         });
         return;
       }
@@ -526,6 +537,14 @@ function App() {
       unlisten = await listen<{ tab_id: string; pane_id: string }>("focus-pane", (event) => {
         const { tab_id, pane_id } = event.payload;
 
+        // Exit welcome mode first if currently showing welcome page
+        setViewMode((currentMode) => {
+          if (currentMode === "welcome") {
+            return "terminal";
+          }
+          return currentMode;
+        });
+
         // Switch to the target tab first
         switchTab(tab_id);
 
@@ -577,69 +596,71 @@ function App() {
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
-      {/* Welcome view - shown when in welcome mode */}
-      <div className={`view-layer ${viewMode === "welcome" ? "" : "hidden"}`}>
-        <WelcomeView
-          onSubmitCommand={handleWelcomeSubmit}
-          recentDirectories={recentDirectories}
-          onRequestCompletion={async (text, cursor) => {
-            // Use the focused pane's session for completions (matches where command will be sent)
-            if (activeTab && focusedPaneId) {
-              // Get sessionId from paneSessionStatusMap which is synced with useTerminalSession
-              const sessionId = paneSessionStatusMap.get(focusedPaneId)?.sessionId;
-              if (sessionId) {
-                return invoke<CompletionResponse>("request_completion", {
-                  sessionId,
-                  text,
-                  cursor,
-                });
+      {viewMode === "welcome" ? (
+        <div className="view-layer">
+          <WelcomeView
+            onSubmitCommand={handleWelcomeSubmit}
+            recentDirectories={recentDirectories}
+            currentWorkingDirectory={activeTabCurrentDirectory}
+            onDirectorySelect={setWelcomeSelectedDirectory}
+            onRequestCompletion={async (text, cursor) => {
+              // Use the focused pane's session for completions (matches where command will be sent)
+              if (activeTab && focusedPaneId) {
+                // Get sessionId from paneSessionStatusMap which is synced with useTerminalSession
+                const sessionId = paneSessionStatusMap.get(focusedPaneId)?.sessionId;
+                if (sessionId) {
+                  return invoke<CompletionResponse>("request_completion", {
+                    sessionId,
+                    text,
+                    cursor,
+                  });
+                }
               }
-            }
-            // Fallback: use cwd-based completion without a session
-            const cwd = activeTabCurrentDirectory ?? "/";
-            return invoke<CompletionResponse>("request_completion_with_cwd", {
-              text,
-              cursor,
-              cwd,
-            });
-          }}
-          onCheckCommandExists={async (cmd) => {
-            return await invoke<boolean>("check_command_exists", { command: cmd });
-          }}
-          onCheckPathExists={async (path, cwd) => {
-            return await invoke<boolean>("check_path_exists", { path, cwd });
-          }}
-        />
-      </div>
-
-      {/* Terminal view - always mounted but hidden in welcome mode */}
-      <div className={`view-layer ${viewMode === "terminal" ? "" : "hidden"}`}>
-        {/* Draggable title bar region for terminal view */}
-        <div className="app-drag-region" data-tauri-drag-region />
-        <TabBar
-          tabs={tabs}
-          activeTabId={activeTabId}
-          onSwitchTab={switchTab}
-          onCreateTab={createTab}
-          onCloseTab={closeTab}
-          tabPresentations={tabPresentations}
-        />
-        {tabs.map((tab) => (
-          <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
-            <SplitPaneContainer
-              paneId={tab.rootPaneId}
-              panes={tab.panes}
-              focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
-              onFocusPane={focusPane}
-              onUpdateSplitRatio={updateSplitRatio}
-              onWorkingDirectoryChange={handleWorkingDirectoryChange}
-              onAgentStateChange={handleAgentStateChange}
-              onOpenPathInNewTab={createTabWithCwd}
-              onSessionStatusChange={handleSessionStatusChange}
-            />
-          </div>
-        ))}
-      </div>
+              // Fallback: use selected directory or active tab's current directory
+              const cwd = welcomeSelectedDirectory ?? activeTabCurrentDirectory ?? "/";
+              return invoke<CompletionResponse>("request_completion_with_cwd", {
+                text,
+                cursor,
+                cwd,
+              });
+            }}
+            onCheckCommandExists={async (cmd) => {
+              return await invoke<boolean>("check_command_exists", { command: cmd });
+            }}
+            onCheckPathExists={async (path, cwd) => {
+              return await invoke<boolean>("check_path_exists", { path, cwd });
+            }}
+          />
+        </div>
+      ) : (
+        <div className="view-layer">
+          {/* Draggable title bar region for terminal view */}
+          <div className="app-drag-region" data-tauri-drag-region />
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onSwitchTab={switchTab}
+            onCreateTab={createTab}
+            onCloseTab={closeTab}
+            tabPresentations={tabPresentations}
+          />
+          {tabs.map((tab) => (
+            <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
+              <SplitPaneContainer
+                paneId={tab.rootPaneId}
+                panes={tab.panes}
+                focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
+                onFocusPane={focusPane}
+                onUpdateSplitRatio={updateSplitRatio}
+                onWorkingDirectoryChange={handleWorkingDirectoryChange}
+                onAgentStateChange={handleAgentStateChange}
+                onOpenPathInNewTab={createTabWithCwd}
+                onSessionStatusChange={handleSessionStatusChange}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

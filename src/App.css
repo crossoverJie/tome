@@ -1076,6 +1076,15 @@ body {
   height: 0;
 }
 
+/* Draggable spacer for window dragging */
+.tab-bar-drag-spacer {
+  flex: 1;
+  min-width: 8px;
+  height: 100%;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
 .tab-item {
   display: flex;
   align-items: center;

@@ -223,6 +223,8 @@ export function InputEditor({
       changes: { from: 0, to: view.state.doc.length, insert: initialValue },
       selection: { anchor: initialValue.length },
     });
+    // Ensure focus after setting content and cursor position
+    view.focus();
   }, [initialValue]);
 
   const closeCompletion = useCallback(() => {
@@ -640,8 +642,10 @@ export function InputEditor({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const initialDoc = initialValue || "";
     const state = EditorState.create({
-      doc: initialValue || "",
+      doc: initialDoc,
+      selection: { anchor: initialDoc.length },
       extensions: [
         keymap.of([
           {
@@ -706,14 +710,14 @@ export function InputEditor({
           },
           ".cm-content": {
             padding: "8px 12px",
-            caretColor: "#d4d4d4",
-            color: "#d4d4d4",
+            caretColor: "var(--text-primary)",
+            color: "var(--text-primary)",
           },
           "&.cm-focused .cm-cursor": {
-            borderLeftColor: "#d4d4d4",
+            borderLeftColor: "var(--text-primary)",
           },
           ".cm-placeholder": {
-            color: "#666",
+            color: "var(--text-muted)",
           },
           ".input-inline-suggestion": {
             color: "var(--text-muted)",
