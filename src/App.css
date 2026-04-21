@@ -75,7 +75,8 @@ body {
   left: 0;
   right: 0;
   height: var(--traffic-lights-height);
-  z-index: 1000;
+  /* z-index below modal overlays (settings-overlay is 200) to allow modal interaction */
+  z-index: 100;
   -webkit-app-region: drag;
   app-region: drag;
 }
