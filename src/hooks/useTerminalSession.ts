@@ -40,6 +40,14 @@ export interface Block {
   endTime: number | null;
   isComplete: boolean;
   isCollapsed: boolean;
+  // Context for prompt bar display
+  context?: {
+    user: string;
+    cwd: string;
+    gitBranch: string | null;
+    runtimeVersion: string | null;
+    timestamp: number;
+  };
 }
 
 type Phase = "prompt" | "input" | "running" | "idle";
@@ -73,6 +81,19 @@ function tokenizeCommand(command: string): string[] {
 function isEnvAssignment(token: string): boolean {
   return /^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token);
 }
+
+// Get current username from environment
+function getCurrentUser(): string {
+  // Try common environment variables for username
+  return (
+    import.meta.env.VITE_USER ||
+    import.meta.env.USER ||
+    import.meta.env.LOGNAME ||
+    import.meta.env.USERNAME ||
+    "user"
+  );
+}
+
 interface RawOutputSnapshot {
   rawOutput: string;
   rawOutputBaseOffset: number;
@@ -238,6 +259,7 @@ interface UseTerminalSessionReturn {
   sessionId: string | null;
   blocks: Block[];
   isInputReady: boolean;
+  phase: Phase;
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
   interactiveSessionKind: InteractiveSessionKind | null;
@@ -809,6 +831,13 @@ export function useTerminalSession(
                       endTime: null,
                       isComplete: false,
                       isCollapsed: false,
+                      context: {
+                        user: getCurrentUser(),
+                        cwd: currentDirectoryRef.current || "~",
+                        gitBranch: gitBranchRef.current,
+                        runtimeVersion: null, // TODO: detect runtime version
+                        timestamp: now,
+                      },
                     },
                   ]);
                   logDiagnostics("useTerminalSession", "command-start", {
@@ -1129,6 +1158,7 @@ export function useTerminalSession(
     sessionId,
     blocks,
     isInputReady,
+    phase: phaseRef.current,
     isAlternateScreen,
     isInteractiveCommandActive,
     interactiveSessionKind,

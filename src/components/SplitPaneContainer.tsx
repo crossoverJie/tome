@@ -14,6 +14,10 @@ interface SplitPaneContainerProps {
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
   onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
+  onSessionStatusChange?: (
+    paneId: string,
+    status: { sessionId: string | null; isInputReady: boolean; gitBranch: string | null }
+  ) => void;
   style?: React.CSSProperties;
 }
 
@@ -26,6 +30,7 @@ export function SplitPaneContainer({
   onWorkingDirectoryChange,
   onAgentStateChange,
   onOpenPathInNewTab,
+  onSessionStatusChange,
   style,
 }: SplitPaneContainerProps) {
   const paneRef = useRef<HTMLDivElement>(null);
@@ -55,6 +60,8 @@ export function SplitPaneContainer({
     [onUpdateSplitRatio, panes]
   );
 
+  const isMultiPane = layout.leaves.length > 1;
+
   return (
     <div ref={paneRef} className="split-layout" style={style}>
       {layout.leaves.map((leaf) => {
@@ -82,6 +89,8 @@ export function SplitPaneContainer({
               onWorkingDirectoryChange={onWorkingDirectoryChange}
               onAgentStateChange={onAgentStateChange}
               onOpenPathInNewTab={onOpenPathInNewTab}
+              isMultiPane={isMultiPane}
+              onSessionStatusChange={onSessionStatusChange}
             />
           </div>
         );

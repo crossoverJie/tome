@@ -20,12 +20,32 @@ interface PaneViewProps {
   onWorkingDirectoryChange: (paneId: string, currentDirectory: string | null) => void;
   onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
+  isMultiPane?: boolean;
+  onSessionStatusChange?: (
+    paneId: string,
+    status: {
+      sessionId: string | null;
+      isInputReady: boolean;
+      gitBranch: string | null;
+      phase?: "idle" | "prompt" | "input" | "running";
+    }
+  ) => void;
 }
 
 interface ResolvedPathTarget {
   path: string;
   isDirectory: boolean;
   parentDirectory: string;
+}
+
+// Get current username from system
+async function getCurrentUser(): Promise<string> {
+  try {
+    const info = await invoke<{ user: string }>("get_system_info");
+    return info.user;
+  } catch {
+    return "user";
+  }
 }
 
 export function PaneView({
@@ -36,11 +56,14 @@ export function PaneView({
   onWorkingDirectoryChange,
   onAgentStateChange,
   onOpenPathInNewTab,
+  isMultiPane = false,
+  onSessionStatusChange,
 }: PaneViewProps) {
   const {
     sessionId: activeSessionId,
     blocks,
     isInputReady,
+    phase,
     isFullscreenTerminalActive,
     aiAgentKind,
     fullscreenOutputStart,
@@ -77,6 +100,7 @@ export function PaneView({
 
   // Search overlay visibility state (local to each pane)
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [username, setUsername] = useState<string>("user");
   const paneRef = useRef<HTMLDivElement>(null);
   const latestPaneSnapshotRef = useRef<Record<string, unknown> | null>(null);
   const fullscreenSessionLabel =
@@ -122,6 +146,11 @@ export function PaneView({
     latestPaneSnapshotRef.current = createPaneDiagnosticsSnapshot("latest");
   }, [createPaneDiagnosticsSnapshot]);
 
+  // Load username on mount
+  useEffect(() => {
+    void getCurrentUser().then(setUsername);
+  }, []);
+
   // Resize PTY when pane size changes
   // We use a ResizeObserver in the parent, but here we handle initial size
   useEffect(() => {
@@ -140,6 +169,45 @@ export function PaneView({
     }
   }, [paneId, aiAgentKind, isFullscreenTerminalActive, onAgentStateChange]);
 
+  // Report session status changes to parent (for welcome page command dispatch)
+  useEffect(() => {
+    if (onSessionStatusChange) {
+      onSessionStatusChange(paneId, {
+        sessionId: activeSessionId,
+        isInputReady,
+        gitBranch,
+        phase,
+      });
+    }
+  }, [paneId, activeSessionId, isInputReady, gitBranch, phase, onSessionStatusChange]);
+
+  const handleSubmit = useCallback(
+    (command: string) => {
+      selectBlock(null);
+      logDiagnostics("PaneView", "submit", {
+        ...createPaneDiagnosticsSnapshot("submit"),
+        commandPreview: command.slice(0, 120),
+      });
+      sendInput(command);
+    },
+    [createPaneDiagnosticsSnapshot, sendInput, selectBlock]
+  );
+
+  // Listen for command submission events from App
+  useEffect(() => {
+    const handleCommandEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ paneId: string; command: string }>;
+      if (customEvent.detail.paneId === paneId) {
+        handleSubmit(customEvent.detail.command);
+      }
+    };
+
+    window.addEventListener("tome:submit-command", handleCommandEvent);
+    return () => {
+      window.removeEventListener("tome:submit-command", handleCommandEvent);
+    };
+  }, [paneId, handleSubmit]);
+
   useEffect(() => {
     logDiagnostics("PaneView", "mount", createPaneDiagnosticsSnapshot("mount"));
 
@@ -154,18 +222,6 @@ export function PaneView({
   useEffect(() => {
     logDiagnostics("PaneView", "state-change", createPaneDiagnosticsSnapshot("state-change"));
   }, [createPaneDiagnosticsSnapshot]);
-
-  const handleSubmit = useCallback(
-    (command: string) => {
-      selectBlock(null);
-      logDiagnostics("PaneView", "submit", {
-        ...createPaneDiagnosticsSnapshot("submit"),
-        commandPreview: command.slice(0, 120),
-      });
-      sendInput(command);
-    },
-    [createPaneDiagnosticsSnapshot, sendInput, selectBlock]
-  );
 
   // Toggle search overlay
   const toggleSearch = useCallback(() => {
@@ -311,7 +367,7 @@ export function PaneView({
 
   return (
     <div
-      className={`pane-view ${isFocused ? "focused" : ""}`}
+      className={`pane-view ${isFocused ? "focused" : ""} ${isMultiPane ? "multi-pane" : ""}`}
       onClick={handleClick}
       onMouseDownCapture={handleMouseDownCapture}
       ref={paneRef}
@@ -352,6 +408,7 @@ export function PaneView({
               busy={!!runningBlock}
               gitBranch={gitBranch}
               currentDirectory={currentDirectory}
+              user={username}
             />
           )}
           {paneInputMode === "running-control" && runningBlock && (

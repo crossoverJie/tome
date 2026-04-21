@@ -55,6 +55,28 @@
 
 ### 2.1 Block 模式（P0）
 
+**新增：欢迎引导页**
+
+首次启动或返回主页时显示欢迎引导页，输入命令后平滑过渡到终端界面。
+
+**功能描述：**
+
+- 欢迎页居中全屏布局，包含以下元素：
+  - Tome Logo（◈ 符号 + Tome 文字）
+  - 自定义欢迎语（支持用户设置，默认："Your command, beautifully"）
+  - 系统信息卡片（OS、Shell、CPU、Memory - 复用现有终端左侧信息）
+  - 最近使用目录列表（显示最近 3-5 个工作目录及 Git 分支）
+  - 命令输入框（底部，大输入区域）
+  - 快捷键提示（Cmd+K 清屏、↑↓ 历史、Cmd+Shift+H 返回主页）
+- 过渡动画：用户输入命令并回车后，引导页向上滑出，终端界面从下方滑入
+- 返回主页快捷键：`Cmd+Shift+H` 从终端界面返回欢迎页
+- 状态管理：`viewMode: 'welcome' | 'terminal'`，可持久化用户偏好
+
+**设计稿：**
+- `superdesign/design_iterations/welcome_design_1.html` - Neon Dark 主题
+- `superdesign/design_iterations/welcome_design_2.html` - Minimal Light 主题
+- `superdesign/design_iterations/welcome_design_3.html` - Cyberpunk 主题
+
 每次命令执行的输入 + 输出构成一个独立的 Block（Card），是整个应用的核心交互单元。
 
 **功能描述：**
@@ -219,6 +241,7 @@
 | `Cmd+,` | 打开设置 |
 | `Cmd+N` | 新建窗口 |
 | `Cmd+`` | 窗口切换器 |
+| `Cmd+Shift+H` | 返回欢迎页 / 切换主页视图 |
 
 **全屏终端（xterm.js 模式）：**
 

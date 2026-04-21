@@ -6,6 +6,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { Settings } from "./components/Settings";
 import { SplitPaneContainer } from "./components/SplitPaneContainer";
 import { TabBar } from "./components/TabBar";
+import {
+  WelcomeView,
+  type RecentDirectoryItem,
+  loadRecentDirectories,
+  saveRecentDirectories,
+  addRecentDirectory,
+} from "./components/WelcomeView";
 import { useTabs } from "./hooks/useTabs";
 import {
   setPaneSessionInitOptions,
@@ -24,6 +31,7 @@ import {
 import type { AiAgentKind } from "./utils/fullscreenSessionState";
 import { useWindowSnapshot } from "./hooks/useWindowSnapshot";
 import { Overview } from "./pages/Overview";
+import type { CompletionResponse } from "./types/completion";
 import "./App.css";
 
 // Check if this is the overview window
@@ -31,11 +39,32 @@ const isOverviewWindow = window.location.pathname === "/overview";
 
 console.log("[App] pathname:", window.location.pathname, "isOverviewWindow:", isOverviewWindow);
 
+// Type for view mode
+type ViewMode = "welcome" | "terminal";
+
 function App() {
   if (isOverviewWindow) {
     console.log("[App] Rendering Overview component");
     return <Overview />;
   }
+
+  // View mode state - default to welcome page
+  const [viewMode, setViewMode] = useState<ViewMode>("welcome");
+
+  // Recent directories state
+  const [recentDirectories, setRecentDirectories] = useState<RecentDirectoryItem[]>(() =>
+    loadRecentDirectories()
+  );
+  // Track selected directory in welcome view for completion context and execution cwd
+  const [welcomeSelectedDirectory, setWelcomeSelectedDirectory] = useState<string | null>(null);
+  // Ref to access selected directory in callback without dependency churn
+  const welcomeSelectedDirectoryRef = useRef<string | null>(null);
+  useEffect(() => {
+    welcomeSelectedDirectoryRef.current = welcomeSelectedDirectory;
+  }, [welcomeSelectedDirectory]);
+
+  // Ref to track command submission from welcome page
+  const pendingCommandRef = useRef<string | null>(null);
 
   const {
     tabs,
@@ -62,6 +91,39 @@ function App() {
   const [paneDirectoryMap, setPaneDirectoryMap] = useState<Map<string, string | null>>(new Map());
   // Track pane agent states for tab agent status display
   const [paneAgentMap, setPaneAgentMap] = useState<Map<string, PaneAgentState>>(new Map());
+  // Track pane session status for welcome page command dispatch readiness
+  // phase: 'idle' | 'prompt' | 'input' | 'running' - only safe to submit in 'input' phase
+  const [paneSessionStatusMap, setPaneSessionStatusMap] = useState<
+    Map<
+      string,
+      {
+        sessionId: string | null;
+        isInputReady: boolean;
+        gitBranch: string | null;
+        phase?: "idle" | "prompt" | "input" | "running";
+      }
+    >
+  >(new Map());
+
+  // Handle pane session status changes from PaneView
+  const handleSessionStatusChange = useCallback(
+    (
+      paneId: string,
+      status: {
+        sessionId: string | null;
+        isInputReady: boolean;
+        gitBranch: string | null;
+        phase?: "idle" | "prompt" | "input" | "running";
+      }
+    ) => {
+      setPaneSessionStatusMap((prev) => {
+        const next = new Map(prev);
+        next.set(paneId, status);
+        return next;
+      });
+    },
+    []
+  );
 
   // Window snapshot reporting
   useWindowSnapshot({
@@ -103,26 +165,7 @@ function App() {
     return blockSelectionMap.get(focusedPaneId) || null;
   }, [focusedPaneId, blockSelectionMap]);
 
-  const handleWorkingDirectoryChange = useCallback(
-    (paneId: string, currentDirectory: string | null) => {
-      setPaneDirectoryMap((prev) => {
-        const nextValue = currentDirectory ?? null;
-        if ((prev.get(paneId) ?? null) === nextValue) {
-          return prev;
-        }
-
-        const next = new Map(prev);
-        if (nextValue) {
-          next.set(paneId, nextValue);
-        } else {
-          next.delete(paneId);
-        }
-        return next;
-      });
-    },
-    []
-  );
-
+  // Track working directory changes for recent directories is now defined above
   // Handle agent state changes from panes
   const handleAgentStateChange = useCallback(
     (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => {
@@ -175,6 +218,108 @@ function App() {
     return activeTabCurrentDirectory ? `${activeTabCurrentDirectory} — Tome` : "Tome";
   }, [activeTabCurrentDirectory]);
 
+  // Handle command submission from welcome page
+  const handleWelcomeSubmit = useCallback(
+    (command: string, targetDirectory?: string) => {
+      if (!command.trim()) {
+        return;
+      }
+
+      // If a target directory is selected, prepend cd command to change to that directory
+      if (targetDirectory && targetDirectory !== activeTabCurrentDirectory) {
+        // Shell-escape the path for safe use in cd command
+        const escapedPath = targetDirectory.replace(/([\s$`'"\\!*?#[\](){}<>;|&])/g, "\\$1");
+        pendingCommandRef.current = `cd ${escapedPath} && ${command}`;
+      } else {
+        pendingCommandRef.current = command;
+      }
+      setViewMode("terminal");
+
+      logDiagnostics("App", "welcome-submit", {
+        command: pendingCommandRef.current.slice(0, 100),
+        targetPaneId: focusedPaneId,
+      });
+    },
+    [focusedPaneId, activeTabCurrentDirectory]
+  );
+
+  // Effect to submit pending command after switching to terminal view
+  useEffect(() => {
+    if (viewMode === "terminal" && pendingCommandRef.current && focusedPaneId) {
+      // Check if the focused pane is ready for input
+      // Only submit in 'input' phase to avoid injecting into running/interactive sessions
+      const paneStatus = paneSessionStatusMap.get(focusedPaneId);
+      if (paneStatus?.isInputReady && paneStatus?.phase === "input") {
+        // Pane is ready and in input phase - submit the command immediately
+        const command = pendingCommandRef.current;
+        pendingCommandRef.current = null;
+
+        const event = new CustomEvent("tome:submit-command", {
+          detail: { paneId: focusedPaneId, command },
+        });
+        window.dispatchEvent(event);
+      }
+      // If not ready or not in input phase, the effect will re-run when paneSessionStatusMap updates
+    }
+  }, [viewMode, focusedPaneId, paneSessionStatusMap]);
+
+  // Track working directory changes for recent directories
+  const handleWorkingDirectoryChange = useCallback(
+    (paneId: string, currentDirectory: string | null) => {
+      setPaneDirectoryMap((prev) => {
+        const nextValue = currentDirectory ?? null;
+        if ((prev.get(paneId) ?? null) === nextValue) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        if (nextValue) {
+          next.set(paneId, nextValue);
+
+          // Only add to recent directories when directory actually changes
+          // Get current git branch for this pane (may be null initially)
+          const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch ?? null;
+          setRecentDirectories((current) => {
+            const updated = addRecentDirectory(current, nextValue, gitBranch);
+            saveRecentDirectories(updated);
+            return updated;
+          });
+        } else {
+          next.delete(paneId);
+        }
+        return next;
+      });
+    },
+    [paneSessionStatusMap]
+  );
+
+  // Update git branch in recent directories when branch changes (without reordering)
+  useEffect(() => {
+    setRecentDirectories((current) => {
+      let updated = current;
+      let hasChanges = false;
+
+      for (const [paneId, path] of paneDirectoryMap.entries()) {
+        if (!path) continue;
+
+        const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch;
+        if (gitBranch === undefined) continue;
+
+        // Find existing entry and update branch without reordering
+        const existingIndex = updated.findIndex((d) => d.path === path);
+        if (existingIndex !== -1 && updated[existingIndex].gitBranch !== gitBranch) {
+          updated = updated.map((d, i) => (i === existingIndex ? { ...d, gitBranch } : d));
+          hasChanges = true;
+        }
+      }
+
+      if (hasChanges) {
+        saveRecentDirectories(updated);
+      }
+      return updated;
+    });
+  }, [paneSessionStatusMap, paneDirectoryMap]);
+
   const handleSplitPane = useCallback(
     (direction: "horizontal" | "vertical") => {
       if (!focusedPaneId) {
@@ -209,6 +354,13 @@ function App() {
       if (e.metaKey && e.key === ",") {
         e.preventDefault();
         setShowSettings((prev) => !prev);
+        return;
+      }
+
+      // Return to home (welcome page): Cmd+Shift+H
+      if (e.metaKey && e.shiftKey && (e.key === "H" || e.key === "h")) {
+        e.preventDefault();
+        setViewMode("welcome");
         return;
       }
 
@@ -411,6 +563,14 @@ function App() {
       unlisten = await listen<{ tab_id: string; pane_id: string }>("focus-pane", (event) => {
         const { tab_id, pane_id } = event.payload;
 
+        // Exit welcome mode first if currently showing welcome page
+        setViewMode((currentMode) => {
+          if (currentMode === "welcome") {
+            return "terminal";
+          }
+          return currentMode;
+        });
+
         // Switch to the target tab first
         switchTab(tab_id);
 
@@ -461,28 +621,77 @@ function App() {
   return (
     <div className="app" ref={containerRef}>
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSwitchTab={switchTab}
-        onCreateTab={createTab}
-        onCloseTab={closeTab}
-        tabPresentations={tabPresentations}
-      />
-      {tabs.map((tab) => (
-        <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
-          <SplitPaneContainer
-            paneId={tab.rootPaneId}
-            panes={tab.panes}
-            focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
-            onFocusPane={focusPane}
-            onUpdateSplitRatio={updateSplitRatio}
-            onWorkingDirectoryChange={handleWorkingDirectoryChange}
-            onAgentStateChange={handleAgentStateChange}
-            onOpenPathInNewTab={createTabWithCwd}
-          />
-        </div>
-      ))}
+
+      {/* Welcome view - shown when in welcome mode */}
+      <div className={`view-layer ${viewMode === "welcome" ? "" : "hidden"}`}>
+        <WelcomeView
+          onSubmitCommand={handleWelcomeSubmit}
+          recentDirectories={recentDirectories}
+          currentWorkingDirectory={activeTabCurrentDirectory}
+          onDirectorySelect={setWelcomeSelectedDirectory}
+          onRequestCompletion={async (text, cursor) => {
+            // When user has selected a directory, use it for completions
+            if (welcomeSelectedDirectory) {
+              return invoke<CompletionResponse>("request_completion_with_cwd", {
+                text,
+                cursor,
+                cwd: welcomeSelectedDirectory,
+              });
+            }
+            // Otherwise use the focused pane's session if available
+            if (activeTab && focusedPaneId) {
+              const sessionId = paneSessionStatusMap.get(focusedPaneId)?.sessionId;
+              if (sessionId) {
+                return invoke<CompletionResponse>("request_completion", {
+                  sessionId,
+                  text,
+                  cursor,
+                });
+              }
+            }
+            // Fallback: use active tab's current directory
+            const cwd = activeTabCurrentDirectory ?? "/";
+            return invoke<CompletionResponse>("request_completion_with_cwd", {
+              text,
+              cursor,
+              cwd,
+            });
+          }}
+          onCheckCommandExists={async (cmd) => {
+            return await invoke<boolean>("check_command_exists", { command: cmd });
+          }}
+          onCheckPathExists={async (path, cwd) => {
+            return await invoke<boolean>("check_path_exists", { path, cwd });
+          }}
+        />
+      </div>
+
+      {/* Terminal view - always mounted but hidden in welcome mode */}
+      <div className={`view-layer ${viewMode === "terminal" ? "" : "hidden"}`}>
+        <TabBar
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onSwitchTab={switchTab}
+          onCreateTab={createTab}
+          onCloseTab={closeTab}
+          tabPresentations={tabPresentations}
+        />
+        {tabs.map((tab) => (
+          <div key={tab.id} className={`tab-content ${tab.id !== activeTabId ? "hidden" : ""}`}>
+            <SplitPaneContainer
+              paneId={tab.rootPaneId}
+              panes={tab.panes}
+              focusedPaneId={tab.id === activeTabId ? tab.focusedPaneId : null}
+              onFocusPane={focusPane}
+              onUpdateSplitRatio={updateSplitRatio}
+              onWorkingDirectoryChange={handleWorkingDirectoryChange}
+              onAgentStateChange={handleAgentStateChange}
+              onOpenPathInNewTab={createTabWithCwd}
+              onSessionStatusChange={handleSessionStatusChange}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

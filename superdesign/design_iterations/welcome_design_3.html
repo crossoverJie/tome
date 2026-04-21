@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tome Welcome - Cyberpunk Theme</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Space Mono', monospace; }
+
+        :root {
+            --bg-primary: #050508;
+            --bg-secondary: #0a0a0f;
+            --bg-card: #0f0f16;
+            --text-primary: #e0e0ff;
+            --text-secondary: #606080;
+            --text-muted: #404060;
+            --border-color: #1a1a2e;
+            --accent: #ff006e;
+            --accent-secondary: #8338ec;
+            --accent-cyan: #00f5ff;
+            --accent-green: #06ffa5;
+            --accent-yellow: #ffbe0b;
+        }
+
+        body {
+            background: linear-gradient(180deg, #050508 0%, #0a0a1a 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+        }
+
+        .cyber-border {
+            border: 1px solid;
+            border-image: linear-gradient(135deg, #ff006e, #8338ec, #3a86ff) 1;
+        }
+
+        .cyber-glow {
+            box-shadow: 0 0 40px rgba(131, 56, 236, 0.15),
+                        inset 0 0 40px rgba(131, 56, 236, 0.03);
+        }
+
+        .neon-text-pink {
+            color: #ff006e;
+            text-shadow: 0 0 10px rgba(255, 0, 110, 0.5);
+        }
+
+        .neon-text-cyan {
+            color: #00f5ff;
+            text-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+        }
+
+        .neon-text-purple {
+            color: #bd00ff;
+            text-shadow: 0 0 10px rgba(189, 0, 255, 0.5);
+        }
+
+        .gradient-text {
+            background: linear-gradient(90deg, #ff006e, #8338ec, #00f5ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Background effects */
+        .bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(131, 56, 236, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(131, 56, 236, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+
+        .bg-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.2;
+        }
+
+        .bg-orb-1 {
+            width: 500px;
+            height: 500px;
+            background: #ff006e;
+            top: -150px;
+            left: -150px;
+        }
+
+        .bg-orb-2 {
+            width: 400px;
+            height: 400px;
+            background: #8338ec;
+            bottom: -100px;
+            right: -100px;
+        }
+
+        /* Scan line effect */
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0, 245, 255, 0.3), transparent);
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100vh); }
+        }
+
+        /* Card styles */
+        .cyber-card {
+            background: rgba(15, 15, 22, 0.9);
+            border: 1px solid rgba(131, 56, 236, 0.3);
+            position: relative;
+        }
+
+        .cyber-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 0, 110, 0.5), rgba(131, 56, 236, 0.5), transparent);
+        }
+
+        .cyber-card:hover {
+            border-color: rgba(131, 56, 236, 0.6);
+            box-shadow: 0 0 20px rgba(131, 56, 236, 0.1);
+        }
+
+        /* Logo animation */
+        .logo-container {
+            animation: glitch 5s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 90%, 100% { transform: translate(0); }
+            92% { transform: translate(-2px, 2px); }
+            94% { transform: translate(2px, -2px); }
+            96% { transform: translate(-2px, -2px); }
+        }
+
+        /* Input field */
+        .cyber-input {
+            background: rgba(10, 10, 15, 0.8);
+            border: 1px solid rgba(131, 56, 236, 0.4);
+            position: relative;
+        }
+
+        .cyber-input::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, #ff006e, #8338ec, #00f5ff);
+            opacity: 0.5;
+        }
+
+        .cyber-input:focus-within {
+            border-color: rgba(255, 0, 110, 0.6);
+            box-shadow: 0 0 20px rgba(255, 0, 110, 0.1);
+        }
+
+        /* Directory items */
+        .dir-item {
+            transition: all 0.2s ease;
+            border-left: 2px solid transparent;
+        }
+
+        .dir-item:hover {
+            background: rgba(131, 56, 236, 0.1);
+            border-left-color: #ff006e;
+            padding-left: 1rem;
+        }
+
+        /* Keyboard shortcuts */
+        .kbd-cyber {
+            background: rgba(255, 0, 110, 0.1);
+            border: 1px solid rgba(255, 0, 110, 0.3);
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-size: 10px;
+            color: #ff006e;
+            text-shadow: 0 0 5px rgba(255, 0, 110, 0.3);
+        }
+
+        /* Corner decorations */
+        .corner {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 1px solid rgba(131, 56, 236, 0.4);
+        }
+
+        .corner-tl { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+        .corner-tr { top: -1px; right: -1px; border-left: none; border-bottom: none; }
+        .corner-bl { bottom: -1px; left: -1px; border-right: none; border-top: none; }
+        .corner-br { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+
+        /* Slide hint */
+        .slide-hint {
+            animation: blink 2s ease-in-out infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 0.8; }
+        }
+
+        /* Status dots */
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1a1a2e; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 relative">
+    <!-- Background effects -->
+    <div class="bg-grid"></div>
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="scan-line"></div>
+
+    <!-- Main container -->
+    <div class="w-full max-w-2xl relative z-10">
+
+        <!-- Logo Section -->
+        <div class="text-center mb-12 logo-container">
+            <div class="text-6xl mb-4 neon-text-pink">◈</div>
+            <h1 class="text-5xl font-bold gradient-text mb-3 tracking-wider">TOME</h1>
+            <p class="text-lg neon-text-cyan italic">"Your command, beautifully"</p>
+            <!-- Welcome message placeholder -->
+            <p class="text-xs text-purple-400/70 mt-3 tracking-widest">/// WELCOME BACK: GEEK ///</p>
+        </div>
+
+        <!-- System Info Card -->
+        <div class="cyber-card p-5 mb-5 rounded">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+
+            <div class="flex items-center gap-2 mb-4 text-purple-400">
+                <span class="text-xs tracking-widest">// SYSTEM_INFO</span>
+                <span class="status-dot bg-green-400 ml-2 shadow-[0_0_8px_#4ade80]"></span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex items-center gap-3 p-3 bg-black/40 border border-purple-500/20">
+                    <span class="text-pink-500 text-lg">🍎</span>
+                    <div>
+                        <div class="text-xs text-gray-500">OS</div>
+                        <div class="text-sm text-cyan-300">macOS 14.5</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 bg-black/40 border border-purple-500/20">
+                    <span class="text-cyan-400 text-lg">⌨</span>
+                    <div>
+                        <div class="text-xs text-gray-500">SHELL</div>
+                        <div class="text-sm text-cyan-300">zsh</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 bg-black/40 border border-purple-500/20">
+                    <span class="text-purple-400 text-lg">⚙</span>
+                    <div>
+                        <div class="text-xs text-gray-500">CPU</div>
+                        <div class="text-sm text-cyan-300">Apple M4</div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 p-3 bg-black/40 border border-purple-500/20">
+                    <span class="text-green-400 text-lg">🧠</span>
+                    <div>
+                        <div class="text-xs text-gray-500">MEMORY</div>
+                        <div class="text-sm text-cyan-300">87% USED</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Directories -->
+        <div class="cyber-card p-5 mb-5 rounded">
+            <div class="corner corner-tl"></div>
+            <div class="corner corner-tr"></div>
+            <div class="corner corner-bl"></div>
+            <div class="corner corner-br"></div>
+
+            <div class="flex items-center gap-2 mb-3 text-purple-400">
+                <span class="text-xs tracking-widest">// RECENT_DIRS</span>
+            </div>
+            <div class="space-y-1">
+                <div class="dir-item flex items-center gap-3 p-2 cursor-pointer">
+                    <span class="text-pink-500">➜</span>
+                    <span class="text-sm text-gray-300">~/Projects/tome</span>
+                    <span class="text-xs text-cyan-400/70 ml-auto">[main]</span>
+                </div>
+                <div class="dir-item flex items-center gap-3 p-2 cursor-pointer">
+                    <span class="text-pink-500">➜</span>
+                    <span class="text-sm text-gray-300">~/workspace/kernel</span>
+                    <span class="text-xs text-cyan-400/70 ml-auto">[v6.7-rc]</span>
+                </div>
+                <div class="dir-item flex items-center gap-3 p-2 cursor-pointer">
+                    <span class="text-pink-500">➜</span>
+                    <span class="text-sm text-gray-300">~/ml-model</span>
+                    <span class="text-xs text-cyan-400/70 ml-auto">[feature/transformer]</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Command Input -->
+        <div class="cyber-input rounded p-1 mb-8">
+            <div class="flex items-center gap-3 px-4 py-3">
+                <span class="text-pink-500 text-lg animate-pulse">➜</span>
+                <input type="text"
+                       placeholder="Type a command to begin..."
+                       class="flex-1 bg-transparent border-none outline-none text-gray-200 placeholder-gray-600 text-sm uppercase tracking-wider"
+                       style="font-family: 'Space Mono', monospace;">
+                <span class="text-xs text-gray-600">[ENTER]</span>
+            </div>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="flex items-center justify-center gap-4 text-xs">
+            <div class="flex items-center gap-1.5">
+                <span class="kbd-cyber">CMD</span>
+                <span class="text-gray-600">+</span>
+                <span class="kbd-cyber">K</span>
+                <span class="text-gray-500 ml-1">CLEAR</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span class="kbd-cyber">↑</span>
+                <span class="kbd-cyber">↓</span>
+                <span class="text-gray-500 ml-1">HISTORY</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span class="kbd-cyber">CMD</span>
+                <span class="text-gray-600">+</span>
+                <span class="kbd-cyber">SHIFT</span>
+                <span class="text-gray-600">+</span>
+                <span class="kbd-cyber">H</span>
+                <span class="text-gray-500 ml-1">HOME</span>
+            </div>
+        </div>
+
+        <!-- Slide transition hint -->
+        <div class="text-center mt-10 slide-hint">
+            <span class="text-xs text-purple-400/50 tracking-widest">&gt;&gt; AWAITING INPUT &lt;&lt;</span>
+        </div>
+    </div>
+</body>
+</html>

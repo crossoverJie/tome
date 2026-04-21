@@ -1,30 +1,33 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-block: #1e1e3a;
-  --bg-block-hover: #252550;
-  --bg-block-selected: #2a2a5a;
-  --bg-input: #16213e;
-  --text-primary: #d4d4d4;
-  --text-secondary: #888;
-  --text-muted: #666;
-  --border-color: #333366;
-  --accent: #7c7cff;
-  --success: #4ec9b0;
-  --error: #f44747;
+  /* Light Theme Tokens - from terminal_design_2.html */
+  --bg-primary: #fafafa;
+  --bg-secondary: #ffffff;
+  --bg-block: #f5f5f5;
+  --bg-block-hover: #eeeeee;
+  --bg-block-selected: #e8e8f0;
+  --bg-input: #fafafa;
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border-color: #e0e0e0;
+  --border-color-hover: #d0d0d0;
+  --accent: #6366f1;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", monospace;
 
-  /* 语法高亮颜色 */
-  --syntax-command: #ff79c6; /* 命令 - 粉色 */
-  --syntax-argument: #8be9fd; /* 参数 - 青色 */
-  --syntax-path: #f1fa8c; /* 路径 - 黄色 */
-  --syntax-string: #50fa7b; /* 字符串 - 绿色 */
-  --syntax-variable: #bd93f9; /* 变量 - 紫色 */
-  --syntax-operator: #ff79c6; /* 操作符 - 粉色 */
-  --syntax-comment: #6272a4; /* 注释 - 蓝灰 */
-  --syntax-keyword: #ff79c6; /* 关键字 - 粉色 */
-  --syntax-number: #ffb86c; /* 数字 - 橙色 */
-  --syntax-error: #f44747; /* 错误/不存在 - 红色 */
+  /* Syntax highlighting colors - adjusted for light theme */
+  --syntax-command: #d73a49;
+  --syntax-argument: #032f62;
+  --syntax-path: #6f42c1;
+  --syntax-string: #22863a;
+  --syntax-variable: #005cc5;
+  --syntax-operator: #d73a49;
+  --syntax-comment: #6a737d;
+  --syntax-keyword: #d73a49;
+  --syntax-number: #e36209;
+  --syntax-error: #f44747;
 }
 
 * {
@@ -52,6 +55,20 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  background: #f0f0f0;
+  padding-top: 28px; /* Space for macOS traffic lights with overlay titlebar */
+}
+
+/* Draggable title bar region for terminal view */
+.app-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 1000;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 /* Block List */
@@ -77,23 +94,25 @@ body {
 
 /* Block */
 .block {
-  background: var(--bg-block);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  margin-bottom: 4px;
+  border-radius: 8px;
+  margin-bottom: 8px;
   cursor: pointer;
   transition:
     background 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .block:hover {
-  background: var(--bg-block-hover);
+  border-color: var(--border-color-hover);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .block-selected {
-  background: var(--bg-block-selected);
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
 .block.exit-error {
@@ -171,6 +190,7 @@ body {
   line-height: 1.4;
   font-family: var(--font-mono);
   margin: 0;
+  color: var(--text-primary);
 }
 
 .output-link {
@@ -178,19 +198,19 @@ body {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
-  color: #8ec5ff;
+  color: #0366d6;
 }
 
 .output-link:hover {
-  color: #c5e1ff;
+  color: #0056b3;
 }
 
 .output-link-path {
-  color: #9ed9b3;
+  color: #6f42c1;
 }
 
 .output-link-path:hover {
-  color: #c6efd2;
+  color: #5a32a3;
 }
 
 .block-output-collapsed {
@@ -203,7 +223,7 @@ body {
 /* Running Block Styles */
 .block-running {
   border-left: 3px solid var(--accent);
-  background: linear-gradient(90deg, rgba(124, 124, 255, 0.08) 0%, transparent 100%);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.05) 0%, transparent 100%);
 }
 
 .block-running-indicator {
@@ -348,9 +368,9 @@ body {
   z-index: 50;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 6px 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .search-container {
@@ -367,7 +387,7 @@ body {
 .search-input {
   background: var(--bg-block);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 13px;
@@ -391,7 +411,7 @@ body {
 .search-close-btn {
   background: var(--bg-block);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-secondary);
   font-size: 10px;
   cursor: pointer;
@@ -428,12 +448,14 @@ body {
 /* Input Editor */
 .input-editor {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
   position: relative;
-  background: var(--bg-input);
+  background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
-  padding: 8px 12px;
-  min-height: 40px;
+  padding: 6px 12px;
+  min-height: 48px;
+  gap: 12px;
 }
 
 .input-editor.disabled {
@@ -441,6 +463,73 @@ body {
   pointer-events: none;
 }
 
+/* Input Prompt Bar - Arrow-shaped segments */
+.input-prompt-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  flex-shrink: 0;
+  gap: 0;
+  row-gap: 4px;
+}
+
+.input-prompt-bar .prompt-segment {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 14px 4px 14px;
+  font-weight: 500;
+  color: white;
+  white-space: nowrap;
+  position: relative;
+  /* Arrow shape with clip-path */
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
+  margin-right: -10px;
+}
+
+.input-prompt-bar .prompt-icon {
+  font-size: 12px;
+}
+
+/* First segment: no left notch */
+.input-prompt-bar .prompt-segment:first-child {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+  padding-left: 10px;
+  margin-left: -8px;
+}
+
+/* User segment - pink */
+.input-prompt-bar .prompt-segment-user {
+  background: linear-gradient(135deg, #ec4899, #f472b6);
+}
+
+/* Path segment - purple */
+.input-prompt-bar .prompt-segment-path {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+/* Git segment - orange */
+.input-prompt-bar .prompt-segment-git {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+}
+
+/* Version segment - green */
+.input-prompt-bar .prompt-segment-version {
+  background: linear-gradient(135deg, #22c55e, #4ade80);
+}
+
+/* Time segment - cyan */
+.input-prompt-bar .prompt-segment-time {
+  background: linear-gradient(135deg, #06b6d4, #22d3ee);
+}
+
+/* Shell prompt segment - blue */
+.input-prompt-bar .prompt-segment-shell {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+}
+
+/* Legacy prompt style (fallback) */
 .input-prompt {
   color: var(--accent);
   font-weight: bold;
@@ -457,6 +546,7 @@ body {
 .input-editor-container {
   flex: 1;
   position: relative;
+  min-width: 150px;
 }
 
 .completion-menu {
@@ -471,9 +561,9 @@ body {
   gap: 2px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 4px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
   z-index: 40;
 }
 
@@ -484,7 +574,7 @@ body {
   gap: 12px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-primary);
   cursor: pointer;
   font-family: var(--font-mono);
@@ -538,7 +628,7 @@ body {
 .running-command-bar {
   display: flex;
   align-items: center;
-  background: var(--bg-input);
+  background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   padding: 8px 12px;
   min-height: 40px;
@@ -678,10 +768,10 @@ body {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(22, 33, 62, 0.92);
+  background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--border-color);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
   backdrop-filter: blur(12px);
 }
 
@@ -741,7 +831,7 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -751,10 +841,11 @@ body {
 .settings-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: 12px;
   width: 480px;
   max-height: 60vh;
   overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
 }
 
 .settings-header {
@@ -868,15 +959,29 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   overflow: hidden;
   min-width: 0;
   min-height: 0;
-  transition: border-color 0.15s;
 }
 
-.pane-view.focused {
-  border-color: var(--accent);
+/* 单 pane 无指示，多 pane 才显示 focus 状态 */
+.pane-view.multi-pane {
+  transition:
+    opacity 0.15s,
+    filter 0.15s,
+    box-shadow 0.15s;
+}
+
+/* 多 pane: focused 显示 subtle 阴影 */
+.pane-view.multi-pane.focused {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+/* 多 pane: 非 focused 变暗 */
+.pane-view.multi-pane:not(.focused) {
+  opacity: 0.95;
+  filter: brightness(0.98);
 }
 
 .pane-fullscreen-shell {
@@ -898,7 +1003,7 @@ body {
   gap: 12px;
   min-height: 36px;
   padding: 8px 12px;
-  background: rgba(22, 33, 62, 0.96);
+  background: rgba(255, 255, 255, 0.96);
   border-bottom: 1px solid var(--border-color);
   user-select: none;
 }
@@ -959,6 +1064,15 @@ body {
 
 .tab-bar::-webkit-scrollbar {
   height: 0;
+}
+
+/* Draggable spacer for window dragging */
+.tab-bar-drag-spacer {
+  flex: 1;
+  min-width: 8px;
+  height: 100%;
+  -webkit-app-region: drag;
+  app-region: drag;
 }
 
 .tab-item {
@@ -1049,8 +1163,29 @@ body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  background: var(--bg-secondary);
+  margin: 8px;
+  margin-top: 0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .tab-content.hidden {
   display: none;
+}
+
+/* View layer for P1 fix - keeps panes mounted while showing welcome view */
+.view-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-layer.hidden {
+  visibility: hidden;
+  pointer-events: none;
 }

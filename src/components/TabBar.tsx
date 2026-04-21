@@ -32,6 +32,8 @@ export const TabBar = memo(function TabBar({
 
   return (
     <div className="tab-bar">
+      {/* Draggable spacer on the left */}
+      <div className="tab-bar-drag-spacer" data-tauri-drag-region />
       {tabs.map((tab, index) => {
         const presentation = tabPresentations?.get(tab.id);
         const displayLabel = presentation?.label ?? tab.title;
@@ -58,6 +60,8 @@ export const TabBar = memo(function TabBar({
       <div className="tab-new" onClick={onCreateTab} aria-label="New tab">
         +
       </div>
+      {/* Draggable spacer on the right */}
+      <div className="tab-bar-drag-spacer" data-tauri-drag-region />
     </div>
   );
 });
