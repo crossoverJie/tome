@@ -69,6 +69,7 @@ export function WelcomeView({
 }: WelcomeViewProps) {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null);
+  const [inputKey, setInputKey] = useState(0);
   const [initialInput, setInitialInput] = useState<string>("");
 
   // Load system info on mount
@@ -83,6 +84,8 @@ export function WelcomeView({
     // Set cd command as initial input with proper shell escaping
     const cdCommand = `cd ${shellEscapePath(path)}`;
     setInitialInput(cdCommand);
+    // Force InputEditor to re-render even if selecting the same directory
+    setInputKey((k) => k + 1);
   }, []);
 
   const handleSubmit = useCallback(
@@ -185,6 +188,7 @@ export function WelcomeView({
             <span className="welcome-input-prompt">❯</span>
             <div className="welcome-input-container">
               <InputEditor
+                key={inputKey}
                 onSubmit={handleSubmit}
                 onRequestCompletion={onRequestCompletion}
                 onCheckCommandExists={onCheckCommandExists}

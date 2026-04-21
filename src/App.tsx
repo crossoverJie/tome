@@ -259,6 +259,9 @@ function App() {
     const paneData = new Map<string, { path: string; gitBranch: string | null }>();
 
     for (const [paneId, path] of paneDirectoryMap.entries()) {
+      // Skip null/undefined paths
+      if (!path) continue;
+
       const gitBranch = paneSessionStatusMap.get(paneId)?.gitBranch ?? null;
       // Only update if we haven't seen this path yet, or if this pane has a git branch
       const existing = paneData.get(path);
@@ -580,19 +583,16 @@ function App() {
           onSubmitCommand={handleWelcomeSubmit}
           recentDirectories={recentDirectories}
           onRequestCompletion={async (text, cursor) => {
-            // Use the first pane's active session from paneSessionStatusMap
-            if (activeTab) {
-              const firstPane = Array.from(activeTab.panes.values())[0];
-              if (firstPane) {
-                // Get sessionId from paneSessionStatusMap which is synced with useTerminalSession
-                const sessionId = paneSessionStatusMap.get(firstPane.id)?.sessionId;
-                if (sessionId) {
-                  return invoke<CompletionResponse>("request_completion", {
-                    sessionId,
-                    text,
-                    cursor,
-                  });
-                }
+            // Use the focused pane's session for completions (matches where command will be sent)
+            if (activeTab && focusedPaneId) {
+              // Get sessionId from paneSessionStatusMap which is synced with useTerminalSession
+              const sessionId = paneSessionStatusMap.get(focusedPaneId)?.sessionId;
+              if (sessionId) {
+                return invoke<CompletionResponse>("request_completion", {
+                  sessionId,
+                  text,
+                  cursor,
+                });
               }
             }
             // Fallback: use cwd-based completion without a session
