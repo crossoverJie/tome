@@ -105,7 +105,7 @@ export function WelcomeView({
 
   return (
     <div className="welcome-view">
-      {/* Draggable title bar region */}
+      {/* Draggable title bar region - for Overlay titleBarStyle */}
       <div className="welcome-drag-region" data-tauri-drag-region />
 
       {/* Background pattern */}

@@ -620,6 +620,9 @@ function App() {
 
   return (
     <div className="app" ref={containerRef}>
+      {/* Draggable title bar region - for Overlay titleBarStyle */}
+      <div className="app-drag-region" data-tauri-drag-region />
+
       {showSettings && <Settings onClose={() => setShowSettings(false)} />}
 
       {/* Welcome view - shown when in welcome mode */}

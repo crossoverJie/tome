@@ -66,12 +66,30 @@ One event emitted from backend to frontend:
 
 - **Package manager**: pnpm
 - **Prettier**: 100 char width, single quotes, no semicolons, trailing commas ES5
-- **CSS**: Dark theme via CSS variables in App.css (`--bg-primary`, `--accent`, etc.)
-- **Rust errors**: `Result<T, String>` pattern for IPC command error propagation
+- **CSS**: Light theme via CSS variables in App.css (`--bg-primary`, `--accent`, etc.)
+- **Rust errors**: `Result<T, String>` pattern for IPC command handler error propagation
 - **React**: Functional components with hooks, `memo()` for performance-sensitive components
 - **CI**: GitHub Actions runs three jobs on macOS — `test-rust`, `test-frontend`, `build-tauri`
 - **Comments**: All code comments must be in English
 - **Pull Requests**: All PR titles and descriptions must be in English
+
+### Critical Layout Requirements (macOS Traffic Lights)
+
+The app uses Tauri's `"titleBarStyle": "Overlay"` configuration which renders macOS traffic lights (close/minimize/maximize buttons) directly over window content. **This requires special handling:**
+
+1. **CSS Variable**: `--traffic-lights-height: 28px` is defined in `:root` in `App.css`. This is the source of truth for the traffic lights area height.
+
+2. **Required Padding**: The `.app` container must have `padding-top: var(--traffic-lights-height)` to prevent content from being obscured by traffic lights.
+
+3. **View Layer Offset**: The `.view-layer` element uses `position: absolute` with `top: var(--traffic-lights-height)`. This is critical — if `top: 0`, content will overlap with traffic lights.
+
+4. **Drag Regions**: Both `.app-drag-region` and `.welcome-drag-region` must have `height: var(--traffic-lights-height)` to allow window dragging.
+
+**When modifying layout code:**
+- Always use `var(--traffic-lights-height)` instead of hardcoded `28px`
+- If adding new `position: absolute/fixed` elements that cover the full viewport, ensure they respect the traffic lights area
+- Include comments explaining why these values are required
+- Test both terminal view and welcome page after layout changes
 
 ## Pre-Commit Checklist
 
