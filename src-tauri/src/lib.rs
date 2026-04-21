@@ -43,7 +43,7 @@ fn request_completion_with_cwd(
     text: String,
     cursor: usize,
     cwd: String,
-    state: State<AppState>,
+    _state: State<AppState>,
 ) -> Result<CompletionResponse, String> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let current_dir = std::path::PathBuf::from(cwd);

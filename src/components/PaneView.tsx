@@ -23,7 +23,12 @@ interface PaneViewProps {
   isMultiPane?: boolean;
   onSessionStatusChange?: (
     paneId: string,
-    status: { sessionId: string | null; isInputReady: boolean; gitBranch: string | null }
+    status: {
+      sessionId: string | null;
+      isInputReady: boolean;
+      gitBranch: string | null;
+      phase?: "idle" | "prompt" | "input" | "running";
+    }
   ) => void;
 }
 
@@ -58,6 +63,7 @@ export function PaneView({
     sessionId: activeSessionId,
     blocks,
     isInputReady,
+    phase,
     isFullscreenTerminalActive,
     aiAgentKind,
     fullscreenOutputStart,
@@ -170,9 +176,10 @@ export function PaneView({
         sessionId: activeSessionId,
         isInputReady,
         gitBranch,
+        phase,
       });
     }
-  }, [paneId, activeSessionId, isInputReady, gitBranch, onSessionStatusChange]);
+  }, [paneId, activeSessionId, isInputReady, gitBranch, phase, onSessionStatusChange]);
 
   const handleSubmit = useCallback(
     (command: string) => {

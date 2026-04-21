@@ -203,11 +203,51 @@ export function InputEditor({
     onCheckPathExistsRef.current = onCheckPathExists;
   }, [onCheckPathExists]);
 
+  // Track visibility to refocus when editor becomes visible
+  const wasHiddenRef = useRef(true);
+
   useEffect(() => {
-    if (!disabled && viewRef.current) {
-      viewRef.current.focus();
+    if (!disabled && viewRef.current && containerRef.current) {
+      // Only focus if the editor is actually visible (not in a hidden parent)
+      const isVisible = containerRef.current.closest(".hidden") === null;
+      // Focus if visible, or retry when transitioning from hidden to visible
+      if (isVisible) {
+        if (wasHiddenRef.current) {
+          // Transitioning from hidden to visible - ensure focus
+          viewRef.current.focus();
+        }
+        wasHiddenRef.current = false;
+      } else {
+        wasHiddenRef.current = true;
+      }
     }
   }, [disabled]);
+
+  // Additional effect to catch visibility changes when disabled doesn't change
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Find the view-layer ancestor where .hidden is actually toggled (in App.tsx)
+    const viewLayer = container.closest(".view-layer");
+    if (!viewLayer) return;
+
+    const observer = new MutationObserver(() => {
+      const isVisible = viewLayer.classList.contains("hidden") === false;
+      if (isVisible && wasHiddenRef.current && viewRef.current && !disabledRef.current) {
+        // Transitioned from hidden to visible - focus the editor
+        viewRef.current.focus();
+        wasHiddenRef.current = false;
+      } else if (!isVisible) {
+        wasHiddenRef.current = true;
+      }
+    });
+
+    // Observe the view-layer for class changes (where .hidden is toggled)
+    observer.observe(viewLayer, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Update editor content when initialValue changes (e.g., when clicking a directory in welcome page)
   useEffect(() => {

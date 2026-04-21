@@ -20,7 +20,7 @@ export interface RecentDirectoryItem {
 }
 
 interface WelcomeViewProps {
-  onSubmitCommand: (command: string) => void;
+  onSubmitCommand: (command: string, targetDirectory?: string) => void;
   recentDirectories: RecentDirectoryItem[];
   currentWorkingDirectory?: string | null;
   onDirectorySelect?: (path: string | null) => void;
@@ -83,21 +83,24 @@ export function WelcomeView({
       .catch((err) => console.error("Failed to get system info:", err));
   }, []);
 
-  const handleDirectoryClick = useCallback((path: string) => {
-    setSelectedDirectory(path);
-    onDirectorySelect?.(path);
-    // Set cd command as initial input with proper shell escaping
-    const cdCommand = `cd ${shellEscapePath(path)}`;
-    setInitialInput(cdCommand);
-    // Force InputEditor to re-render even if selecting the same directory
-    setInputKey((k) => k + 1);
-  }, [onDirectorySelect]);
+  const handleDirectoryClick = useCallback(
+    (path: string) => {
+      setSelectedDirectory(path);
+      onDirectorySelect?.(path);
+      // Set cd command as initial input with proper shell escaping
+      const cdCommand = `cd ${shellEscapePath(path)}`;
+      setInitialInput(cdCommand);
+      // Force InputEditor to re-render even if selecting the same directory
+      setInputKey((k) => k + 1);
+    },
+    [onDirectorySelect]
+  );
 
   const handleSubmit = useCallback(
     (command: string) => {
-      onSubmitCommand(command);
+      onSubmitCommand(command, selectedDirectory ?? undefined);
     },
-    [onSubmitCommand]
+    [onSubmitCommand, selectedDirectory]
   );
 
   return (
@@ -146,7 +149,7 @@ export function WelcomeView({
               <span className="welcome-system-icon icon-cpu">⚙</span>
               <div className="welcome-system-info">
                 <div className="welcome-system-label">CPU</div>
-                <div className="welcome-system-value">{systemInfo?.cpu || "Apple Silicon"}</div>
+                <div className="welcome-system-value">{systemInfo?.cpu || "Unknown"}</div>
               </div>
             </div>
             <div className="welcome-system-item">

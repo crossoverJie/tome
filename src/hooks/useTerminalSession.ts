@@ -259,6 +259,7 @@ interface UseTerminalSessionReturn {
   sessionId: string | null;
   blocks: Block[];
   isInputReady: boolean;
+  phase: Phase;
   isAlternateScreen: boolean;
   isInteractiveCommandActive: boolean;
   interactiveSessionKind: InteractiveSessionKind | null;
@@ -1157,6 +1158,7 @@ export function useTerminalSession(
     sessionId,
     blocks,
     isInputReady,
+    phase: phaseRef.current,
     isAlternateScreen,
     isInteractiveCommandActive,
     interactiveSessionKind,

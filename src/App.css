@@ -484,14 +484,7 @@ body {
   white-space: nowrap;
   position: relative;
   /* Arrow shape with clip-path */
-  clip-path: polygon(
-    0 0,
-    calc(100% - 10px) 0,
-    100% 50%,
-    calc(100% - 10px) 100%,
-    0 100%,
-    10px 50%
-  );
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%);
   margin-right: -10px;
 }
 
@@ -501,13 +494,7 @@ body {
 
 /* First segment: no left notch */
 .input-prompt-bar .prompt-segment:first-child {
-  clip-path: polygon(
-    0 0,
-    calc(100% - 10px) 0,
-    100% 50%,
-    calc(100% - 10px) 100%,
-    0 100%
-  );
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
   padding-left: 10px;
   margin-left: -8px;
 }
@@ -980,7 +967,10 @@ body {
 
 /* 单 pane 无指示，多 pane 才显示 focus 状态 */
 .pane-view.multi-pane {
-  transition: opacity 0.15s, filter 0.15s, box-shadow 0.15s;
+  transition:
+    opacity 0.15s,
+    filter 0.15s,
+    box-shadow 0.15s;
 }
 
 /* 多 pane: focused 显示 subtle 阴影 */
