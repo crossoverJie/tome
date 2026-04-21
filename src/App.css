@@ -1,4 +1,7 @@
 :root {
+  /* macOS Traffic Lights - Overlay titleBarStyle requires this space */
+  --traffic-lights-height: 28px;
+
   /* Light Theme Tokens - from terminal_design_2.html */
   --bg-primary: #fafafa;
   --bg-secondary: #ffffff;
@@ -56,17 +59,24 @@ body {
   flex-direction: column;
   height: 100vh;
   background: #f0f0f0;
-  padding-top: 28px; /* Space for macOS traffic lights with overlay titlebar */
+  /*
+   * CRITICAL: Must match --traffic-lights-height
+   * Tauri uses "titleBarStyle": "Overlay" which renders traffic lights over content.
+   * This padding prevents content from being obscured by the macOS traffic lights.
+   * The .view-layer top offset must also match this value.
+   */
+  padding-top: var(--traffic-lights-height);
 }
 
-/* Draggable title bar region for terminal view */
+/* Draggable title bar region for Overlay titleBarStyle */
 .app-drag-region {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 28px;
-  z-index: 1000;
+  height: var(--traffic-lights-height);
+  /* z-index below modal overlays (settings-overlay is 200) to allow modal interaction */
+  z-index: 100;
   -webkit-app-region: drag;
   app-region: drag;
 }
@@ -1066,15 +1076,6 @@ body {
   height: 0;
 }
 
-/* Draggable spacer for window dragging */
-.tab-bar-drag-spacer {
-  flex: 1;
-  min-width: 8px;
-  height: 100%;
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
 .tab-item {
   display: flex;
   align-items: center;
@@ -1177,7 +1178,12 @@ body {
 /* View layer for P1 fix - keeps panes mounted while showing welcome view */
 .view-layer {
   position: absolute;
-  top: 0;
+  /*
+   * CRITICAL: Must match --traffic-lights-height and .app padding-top
+   * This offset ensures content starts below the macOS traffic lights.
+   * If this is 0, content will be obscured by traffic lights.
+   */
+  top: var(--traffic-lights-height);
   left: 0;
   right: 0;
   bottom: 0;

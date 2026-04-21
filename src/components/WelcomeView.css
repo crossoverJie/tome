@@ -6,19 +6,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 52px 24px 24px; /* Add top padding for macOS traffic lights */
+  /*
+   * CRITICAL: Top padding must account for macOS traffic lights (--traffic-lights-height = 28px)
+   * plus additional spacing for visual balance. Tauri uses "titleBarStyle": "Overlay".
+   */
+  padding: calc(var(--traffic-lights-height) + 24px) 24px 24px;
   background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 100%);
   z-index: 100;
   overflow: auto;
 }
 
-/* Draggable title bar region */
+/* Draggable title bar region - for Overlay titleBarStyle */
 .welcome-drag-region {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 52px;
+  /* CRITICAL: Must match --traffic-lights-height */
+  height: var(--traffic-lights-height);
   z-index: 101;
   -webkit-app-region: drag;
   app-region: drag;
