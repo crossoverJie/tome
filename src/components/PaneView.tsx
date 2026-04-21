@@ -21,6 +21,10 @@ interface PaneViewProps {
   onAgentStateChange?: (paneId: string, aiAgentKind: AiAgentKind, isActive: boolean) => void;
   onOpenPathInNewTab: (cwd: string) => void;
   isMultiPane?: boolean;
+  onSessionStatusChange?: (
+    paneId: string,
+    status: { sessionId: string | null; isInputReady: boolean; gitBranch: string | null }
+  ) => void;
 }
 
 interface ResolvedPathTarget {
@@ -48,6 +52,7 @@ export function PaneView({
   onAgentStateChange,
   onOpenPathInNewTab,
   isMultiPane = false,
+  onSessionStatusChange,
 }: PaneViewProps) {
   const {
     sessionId: activeSessionId,
@@ -157,6 +162,17 @@ export function PaneView({
       onAgentStateChange(paneId, aiAgentKind, isFullscreenTerminalActive);
     }
   }, [paneId, aiAgentKind, isFullscreenTerminalActive, onAgentStateChange]);
+
+  // Report session status changes to parent (for welcome page command dispatch)
+  useEffect(() => {
+    if (onSessionStatusChange) {
+      onSessionStatusChange(paneId, {
+        sessionId: activeSessionId,
+        isInputReady,
+        gitBranch,
+      });
+    }
+  }, [paneId, activeSessionId, isInputReady, gitBranch, onSessionStatusChange]);
 
   const handleSubmit = useCallback(
     (command: string) => {

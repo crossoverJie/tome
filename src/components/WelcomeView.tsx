@@ -30,6 +30,14 @@ interface WelcomeViewProps {
 const STORAGE_KEY = "tome_recent_directories";
 const MAX_RECENT_DIRS = 5;
 
+// Shell-escape a path for safe use in cd commands
+// Uses backslash escaping to preserve ~ expansion while handling special characters
+function shellEscapePath(path: string): string {
+  // Escape spaces, quotes and other special characters with backslash
+  // This preserves ~ expansion while preventing word splitting and quote issues
+  return path.replace(/([\s$`'"\\!*?#[\](){}<>;|&])/g, "\\$1");
+}
+
 function formatOS(osString: string): string {
   // Format like "macos aarch64" to "macOS (Apple Silicon)"
   const parts = osString.toLowerCase().split(" ");
@@ -61,7 +69,6 @@ export function WelcomeView({
 }: WelcomeViewProps) {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [selectedDirectory, setSelectedDirectory] = useState<string | null>(null);
-  const [inputKey, setInputKey] = useState(0);
   const [initialInput, setInitialInput] = useState<string>("");
 
   // Load system info on mount
@@ -73,11 +80,9 @@ export function WelcomeView({
 
   const handleDirectoryClick = useCallback((path: string) => {
     setSelectedDirectory(path);
-    // Set cd command as initial input
-    const cdCommand = `cd ${path}`;
+    // Set cd command as initial input with proper shell escaping
+    const cdCommand = `cd ${shellEscapePath(path)}`;
     setInitialInput(cdCommand);
-    // Force InputEditor to re-render with new initial value
-    setInputKey((k) => k + 1);
   }, []);
 
   const handleSubmit = useCallback(
@@ -180,7 +185,6 @@ export function WelcomeView({
             <span className="welcome-input-prompt">❯</span>
             <div className="welcome-input-container">
               <InputEditor
-                key={inputKey}
                 onSubmit={handleSubmit}
                 onRequestCompletion={onRequestCompletion}
                 onCheckCommandExists={onCheckCommandExists}

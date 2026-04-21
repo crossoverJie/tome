@@ -39,6 +39,18 @@ fn request_completion(
 }
 
 #[tauri::command]
+fn request_completion_with_cwd(
+    text: String,
+    cursor: usize,
+    cwd: String,
+    state: State<AppState>,
+) -> Result<CompletionResponse, String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let current_dir = std::path::PathBuf::from(cwd);
+    completion::request_completion(&shell, &current_dir, &text, cursor)
+}
+
+#[tauri::command]
 fn get_current_directory(session_id: String, state: State<AppState>) -> Result<String, String> {
     state.pty_manager.get_current_directory(&session_id)
 }
@@ -271,6 +283,7 @@ pub fn run() {
             create_session,
             write_input,
             request_completion,
+            request_completion_with_cwd,
             get_current_directory,
             resize_pty,
             move_cursor_to_position,

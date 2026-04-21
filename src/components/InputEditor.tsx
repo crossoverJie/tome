@@ -209,6 +209,22 @@ export function InputEditor({
     }
   }, [disabled]);
 
+  // Update editor content when initialValue changes (e.g., when clicking a directory in welcome page)
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || initialValue === undefined) {
+      return;
+    }
+    const currentText = view.state.doc.toString();
+    if (currentText === initialValue) {
+      return;
+    }
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: initialValue },
+      selection: { anchor: initialValue.length },
+    });
+  }, [initialValue]);
+
   const closeCompletion = useCallback(() => {
     requestSequenceRef.current += 1;
     setCompletionState(EMPTY_COMPLETION_STATE);
